@@ -29,7 +29,12 @@ public class EquipmentValidator
             errors.Add("Инвентарный номер обязателен для заполнения.");
         }
 
-        if (equipment.Status is not ("Исправно" or "Требует обслуживания" or "Неисправно"))
+        if (string.IsNullOrWhiteSpace(equipment.Location))
+        {
+            errors.Add("Место установки обязательно для заполнения.");
+        }
+
+        if (!Equipment.AllowedStatuses.Contains(equipment.Status))
         {
             errors.Add("Статус должен иметь значение «Исправно», «Требует обслуживания» или «Неисправно».");
         }

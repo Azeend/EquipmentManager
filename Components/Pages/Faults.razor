@@ -1,0 +1,185 @@
+@page "/faults"
+@using EquipmentManager.Models
+@using EquipmentManager.Services
+@inject FaultDataService FaultDataService
+@inject EquipmentDataService EquipmentDataService
+
+<PageTitle>Заявки — EquipmentManager</PageTitle>
+<h1>Заявки на устранение неисправностей</h1>
+<p class="text-secondary">Учебный режим с тестовыми заявками. Авторизация и проверка ролей не подключены; автор и исполнитель не определяются. Данные хранятся в памяти до перезапуска приложения. Даты указаны в UTC.</p>
+@if (errors.Count > 0)
+{
+    <div class="alert alert-danger" role="alert"><ul class="mb-0">
+        @foreach (var error in errors) { <li>@error</li> }
+    </ul></div>
+}
+@if (message is not null) { <div class="alert alert-success" role="status">@message</div> }
+<section class="card card-body mb-3" aria-labelledby="registration-title">
+    <h2 id="registration-title" class="h4">Регистрация неисправности</h2>
+    @if (equipment.Count == 0) { <p>Нет оборудования. Сначала добавьте его в реестр.</p> }
+    <EditForm Model="registration" OnValidSubmit="Register" FormName="fault-registration">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <label for="fault-equipment" class="form-label">Оборудование</label>
+                <InputSelect id="fault-equipment" class="form-select" @bind-Value="registration.EquipmentId" aria-required="true">
+                    <option value="0">Выберите оборудование</option>
+                    @foreach (var item in equipment) { <option value="@item.Id">@item.Name (@item.InventoryNumber)</option> }
+                </InputSelect>
+                <ValidationMessage For="() => registration.EquipmentId" />
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="fault-description" class="form-label">Описание неисправности</label>
+                <InputTextArea id="fault-description" class="form-control" @bind-Value="registration.Description" aria-required="true" />
+                <ValidationMessage For="() => registration.Description" />
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary" disabled="@(equipment.Count == 0)">Зарегистрировать</button>
+                <button type="button" class="btn btn-secondary" @onclick="ResetRegistration">Отмена</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="Refresh">Обновить данные</button>
+            </div>
+        </div>
+    </EditForm>
+</section>
+@if (selectedFault is not null)
+{
+    <section class="card card-body mb-3" aria-labelledby="completion-title">
+        <h2 id="completion-title" class="h4">Завершение заявки №@selectedFault.Id</h2>
+        <p>@selectedFault.EquipmentLabel — @selectedFault.Description</p>
+        <EditForm Model="completion" OnValidSubmit="Complete" FormName="fault-completion">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <label for="fault-work" class="form-label">Описание выполненных работ</label>
+            <InputTextArea id="fault-work" class="form-control" @bind-Value="completion.WorkDescription" aria-required="true" />
+            <ValidationMessage For="() => completion.WorkDescription" />
+            <label for="fault-result" class="form-label mt-2">Результат</label>
+            <InputTextArea id="fault-result" class="form-control" @bind-Value="completion.Result" aria-required="true" />
+            <ValidationMessage For="() => completion.Result" />
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <button type="submit" class="btn btn-primary">Завершить</button>
+                <button type="button" class="btn btn-secondary" @onclick="CancelCompletion">Отмена</button>
+            </div>
+        </EditForm>
+    </section>
+}
+@if (faults.Count == 0) { <p>Заявок пока нет.</p> }
+else
+{
+    <div class="table-responsive border rounded bg-white" role="region" aria-label="Очередь заявок" tabindex="0">
+        <table class="table align-middle faults-table">
+            <thead><tr><th scope="col">№</th><th scope="col">Оборудование</th><th scope="col">Описание</th><th scope="col">Статус</th><th scope="col">Автор и даты (UTC)</th><th scope="col">Работы и результат</th><th scope="col">Действия</th></tr></thead>
+            <tbody>
+                @foreach (var fault in faults)
+                {
+                    <tr @key="fault.Id" id="@($"fault-{fault.Id}")">
+                        <td>@fault.Id</td><td>@fault.EquipmentLabel</td><td>@fault.Description</td><td>@fault.Status</td>
+                        <td>@fault.Author<br />Создана: @FormatDate(fault.CreatedAt)<br />Начата: @FormatDate(fault.StartedAt)<br />Завершена: @FormatDate(fault.CompletedAt)</td>
+                        <td>@fault.WorkDescription<br />@fault.Result</td>
+                        <td>
+                            @if (fault.Status == "Новая")
+                            { <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => Start(fault)">Взять в работу</button> }
+                            else if (fault.Status == "В работе")
+                            { <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => BeginCompletion(fault)">Завершить</button> }
+                            else { <span>Обработка завершена</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<Equipment> equipment = [];
+    private IReadOnlyList<Fault> faults = [];
+    private IReadOnlyList<string> errors = [];
+    private FaultRegistration registration = new();
+    private FaultCompletion completion = new();
+    private Fault? selectedFault;
+    private string? message;
+
+    /// <summary>Загружает данные при открытии страницы.</summary>
+    protected override void OnInitialized() => Refresh();
+
+    /// <summary>Обновляет очередь и выбор оборудования, сохраняя черновики.</summary>
+    private void Refresh()
+    {
+        equipment = EquipmentDataService.GetEquipment();
+        faults = FaultDataService.GetFaults();
+        if (selectedFault is not null)
+        {
+            var id = selectedFault.Id;
+            selectedFault = faults.FirstOrDefault(item => item.Id == id) ?? selectedFault;
+        }
+    }
+
+    /// <summary>Регистрирует заявку, очищая ввод только при успехе.</summary>
+    private void Register()
+    {
+        message = null;
+        errors = FaultDataService.Register(registration);
+        if (errors.Count == 0)
+        {
+            registration = new();
+            message = "Заявка зарегистрирована со статусом «Новая».";
+        }
+        Refresh();
+    }
+
+    /// <summary>Отменяет ввод без сохранения.</summary>
+    private void ResetRegistration()
+    {
+        registration = new();
+        errors = [];
+        message = null;
+    }
+
+    /// <summary>Переводит новую заявку в работу.</summary>
+    private void Start(Fault fault)
+    {
+        message = null;
+        errors = FaultDataService.ChangeStatus(fault.Id, fault.Version, "В работе");
+        if (errors.Count == 0)
+        {
+            message = $"Заявка №{fault.Id} взята в работу.";
+        }
+        Refresh();
+    }
+
+    /// <summary>Открывает черновик завершения выбранной заявки.</summary>
+    private void BeginCompletion(Fault fault)
+    {
+        selectedFault = fault;
+        completion = new();
+        errors = [];
+        message = null;
+    }
+
+    /// <summary>Сохраняет статус и сведения о выполненных работах одной командой.</summary>
+    private void Complete()
+    {
+        if (selectedFault is null)
+        {
+            return;
+        }
+        message = null;
+        errors = FaultDataService.ChangeStatus(selectedFault.Id, selectedFault.Version, "Завершена", completion);
+        if (errors.Count == 0)
+        {
+            message = $"Заявка №{selectedFault.Id} завершена.";
+            CancelCompletion();
+        }
+        Refresh();
+    }
+
+    /// <summary>Отменяет завершение без изменения заявки.</summary>
+    private void CancelCompletion()
+    {
+        selectedFault = null;
+        completion = new();
+    }
+
+    /// <summary>Форматирует время в UTC.</summary>
+    private static string FormatDate(DateTimeOffset? date) => date?.UtcDateTime.ToString("dd.MM.yyyy HH:mm") ?? "—";
+}

@@ -1,0 +1,108 @@
+@page "/maintenance-history"
+@using EquipmentManager.Models
+@using EquipmentManager.Services
+@inject FaultDataService FaultDataService
+@inject EquipmentDataService EquipmentDataService
+@inject ILogger<MaintenanceHistory> Logger
+
+<PageTitle>История обслуживания — EquipmentManager</PageTitle>
+<h1>История обслуживания</h1>
+<p class="text-secondary">Записи создаются при завершении заявок. Даты указаны в UTC. Хранение в памяти: при перезапуске приложения история теряется.</p>
+<div class="row g-3 align-items-end mb-3">
+    <div class="col-12 col-md-8">
+        <label for="history-equipment" class="form-label">Оборудование</label>
+        <select id="history-equipment" class="form-select" @bind="selectedEquipmentId">
+            <option value="0">Всё оборудование</option>
+            @foreach (var item in equipmentOptions)
+            {
+                <option value="@item.Key">@item.Value</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-4">
+        <button type="button" class="btn btn-outline-primary" @onclick="LoadHistory">Обновить историю</button>
+    </div>
+</div>
+@{
+    // Не вычисляем выборку при ошибке; при успешной загрузке используем её один раз за рендер.
+    IReadOnlyList<MaintenanceRecord> filteredRecords = loadError is null ? FilteredRecords : [];
+}
+
+@if (loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        @loadError
+        <button type="button" class="btn btn-outline-danger ms-2" @onclick="LoadHistory">Повторить</button>
+    </div>
+}
+else if (filteredRecords.Count == 0)
+{
+    <p role="status">История обслуживания отсутствует</p>
+}
+else
+{
+    <div class="table-responsive border rounded bg-white" role="region" aria-label="История обслуживания" tabindex="0">
+        <table class="table align-middle history-table">
+            <thead>
+                <tr><th scope="col">Оборудование</th><th scope="col">Дата (UTC)</th><th scope="col">Выполненные работы</th><th scope="col">Результат</th><th scope="col">Заявка</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var record in filteredRecords)
+                {
+                    <tr @key="record.FaultId">
+                        <td>@record.EquipmentLabel</td>
+                        <td>@record.PerformedAt.UtcDateTime.ToString("dd.MM.yyyy HH:mm:ss")</td>
+                        <td>@record.WorkDescription</td>
+                        <td>@record.Result</td>
+                        <td><a href="@($"faults#fault-{record.FaultId}")">Заявка №@record.FaultId</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MaintenanceRecord> records = [];
+    private IReadOnlyList<KeyValuePair<int, string>> equipmentOptions = [];
+    private int selectedEquipmentId;
+    private string? loadError;
+
+    /// <summary>Отбирает записи выбранного оборудования, сохраняя порядок по дате.</summary>
+    private IReadOnlyList<MaintenanceRecord> FilteredRecords => selectedEquipmentId == 0
+        ? records
+        : records.Where(item => item.EquipmentId == selectedEquipmentId).ToList();
+
+    /// <summary>Загружает историю при открытии страницы.</summary>
+    protected override void OnInitialized() => LoadHistory();
+
+    /// <summary>Обновляет историю и список оборудования, сохраняя выбранный фильтр.</summary>
+    private void LoadHistory()
+    {
+        try
+        {
+            var loadedRecords = FaultDataService.GetMaintenanceHistory();
+            var currentEquipment = EquipmentDataService.GetEquipment();
+            var options = currentEquipment.ToDictionary(item => item.Id,
+                item => $"{item.Name} ({item.InventoryNumber})");
+            foreach (var record in loadedRecords)
+            {
+                options.TryAdd(record.EquipmentId, $"{record.EquipmentLabel} — удалено из реестра");
+            }
+            // Сохраняем фильтр даже при удалении оборудования без истории в другом сеансе.
+            if (selectedEquipmentId != 0 && !options.ContainsKey(selectedEquipmentId))
+            {
+                options[selectedEquipmentId] = "Оборудование недоступно в реестре";
+            }
+            equipmentOptions = options.OrderBy(item => item.Value).ToList();
+            records = loadedRecords;
+            loadError = null;
+        }
+        catch (Exception exception)
+        {
+            var errorId = Guid.NewGuid().ToString("N");
+            Logger.LogError(exception, "Ошибка загрузки истории обслуживания. Код: {ErrorId}", errorId);
+            loadError = $"Не удалось загрузить историю обслуживания. Повторите попытку. Код ошибки: {errorId}";
+        }
+    }
+}

@@ -9,9 +9,78 @@
 
 <p>Список единиц промышленного оборудования, учтённых в системе.</p>
 
+<button type="button" class="btn btn-primary mb-3" @onclick="AddEquipment">Добавить оборудование</button>
+
+@if (deletionMessage is not null)
+{
+    <div class="alert alert-info" role="status">@deletionMessage</div>
+}
+
+@if (equipmentToDelete is not null)
+{
+    <section class="card border-danger mb-3" role="dialog" aria-labelledby="delete-equipment-title" aria-describedby="delete-equipment-description" tabindex="-1" @ref="deletionDialog">
+        <div class="card-body">
+            <h2 id="delete-equipment-title" class="h4">Подтверждение удаления</h2>
+            <p id="delete-equipment-description">Удалить оборудование «@equipmentToDelete.Name»?</p>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-danger" @onclick="ConfirmDeletion">Удалить</button>
+                <button type="button" class="btn btn-secondary" @onclick="CancelDeletion">Отмена</button>
+            </div>
+        </div>
+    </section>
+}
+
+@if (editingEquipment is not null)
+{
+    <section class="card card-body mb-3" aria-labelledby="equipment-form-title">
+        <h2 id="equipment-form-title" class="h4">@(editingEquipment.Id == 0 ? "Добавление оборудования" : "Редактирование оборудования")</h2>
+        @if (validationErrors.Count > 0)
+        {
+            <div class="alert alert-danger" role="alert">
+                <ul class="mb-0">
+                    @foreach (var error in validationErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+        <EditForm Model="editingEquipment" OnSubmit="SaveEquipment" FormName="equipment-editor">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label for="equipment-name" class="form-label">Наименование</label>
+                    <InputText id="equipment-name" class="form-control" @bind-Value="editingEquipment.Name" aria-required="true" />
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="equipment-number" class="form-label">Инвентарный номер</label>
+                    <InputText id="equipment-number" class="form-control" @bind-Value="editingEquipment.InventoryNumber" aria-required="true" />
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="equipment-location" class="form-label">Место установки</label>
+                    <InputText id="equipment-location" class="form-control" @bind-Value="editingEquipment.Location" aria-required="true" />
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="equipment-status" class="form-label">Состояние</label>
+                    <InputSelect id="equipment-status" class="form-select" @bind-Value="editingEquipment.Status" aria-required="true">
+                        @foreach (var status in Equipment.AllowedStatuses)
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelEditing">Отмена</button>
+                </div>
+            </div>
+        </EditForm>
+    </section>
+}
+
 <div class="mb-3">
     <label for="equipment-search" class="form-label">Поиск</label>
     <input id="equipment-search"
+           @ref="searchInput"
            class="form-control"
            type="search"
            placeholder="Наименование или инвентарный номер"
@@ -19,40 +88,194 @@
            @bind:event="oninput" />
 </div>
 
+@{
+    // Один снимок фильтра для проверки пустоты и вывода таблицы в текущем рендере.
+    var filteredEquipment = FilteredEquipment;
+}
+
 @if (allEquipment is null)
 {
     <p><em>Загрузка...</em></p>
 }
-else if (FilteredEquipment.Count == 0)
+else if (allEquipment.Count == 0)
 {
-    <p>Оборудование не найдено</p>
+    <p role="status">В реестре пока нет оборудования</p>
+}
+else if (filteredEquipment.Count == 0)
+{
+    <p role="status">Оборудование не найдено</p>
 }
 else
 {
-    <table class="table">
+    <div class="table-responsive border rounded bg-white" role="region" aria-label="Реестр оборудования" tabindex="0">
+    <table class="table equipment-table">
         <thead>
             <tr>
-                <th>Наименование</th>
-                <th>Инвентарный номер</th>
-                <th>Место установки</th>
-                <th>Состояние</th>
+                <th scope="col">Наименование</th>
+                <th scope="col">Инвентарный номер</th>
+                <th scope="col">Место установки</th>
+                <th scope="col">Состояние</th>
+                <th scope="col">Действия</th>
             </tr>
         </thead>
         <tbody>
-            @foreach (var item in FilteredEquipment)
+            @foreach (var item in filteredEquipment)
             {
-                <tr>
+                <tr @key="item.Id">
                     <td>@item.Name</td>
                     <td>@item.InventoryNumber</td>
                     <td>@item.Location</td>
                     <td>@item.Status</td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => EditEquipment(item)" aria-label="@($"Редактировать {item.Name}")">Редактировать</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeletion(item)" aria-label="@($"Удалить {item.Name}")">Удалить</button>
+                        </div>
+                    </td>
                 </tr>
             }
         </tbody>
     </table>
+    </div>
 }
 
 @code {
+    private ElementReference deletionDialog;
+    private ElementReference searchInput;
+    private bool focusDeletionDialog;
+    private bool focusSearch;
+
+    /// <summary>Перемещает клавиатурный фокус в подтверждение и возвращает к поиску после закрытия.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusDeletionDialog)
+        {
+            focusDeletionDialog = false;
+            await deletionDialog.FocusAsync();
+        }
+        else if (focusSearch)
+        {
+            focusSearch = false;
+            await searchInput.FocusAsync();
+        }
+    }
+
+    /// <summary>
+    /// Запись, выбранная для подтверждения удаления.
+    /// </summary>
+    private Equipment? equipmentToDelete;
+
+    /// <summary>
+    /// Сообщение о результате удаления.
+    /// </summary>
+    private string? deletionMessage;
+
+    /// <summary>
+    /// Показывает подтверждение, не изменяя хранилище.
+    /// </summary>
+    private void RequestDeletion(Equipment equipment)
+    {
+        equipmentToDelete = equipment;
+        focusDeletionDialog = true;
+        deletionMessage = null;
+    }
+
+    /// <summary>
+    /// Удаляет выбранную запись и обновляет таблицу с сохранением поискового запроса.
+    /// </summary>
+    private void ConfirmDeletion()
+    {
+        if (equipmentToDelete is null)
+        {
+            return;
+        }
+
+        var equipment = equipmentToDelete;
+        var deleted = EquipmentDataService.Delete(equipment.Id);
+        allEquipment = EquipmentDataService.GetEquipment();
+        deletionMessage = deleted
+            ? $"Оборудование «{equipment.Name}» удалено."
+            : $"Оборудование «{equipment.Name}» уже отсутствует. Список обновлён.";
+
+        if (editingEquipment?.Id == equipment.Id)
+        {
+            CancelEditing();
+        }
+
+        CancelDeletion();
+    }
+
+    /// <summary>
+    /// Закрывает подтверждение без изменения данных.
+    /// </summary>
+    private void CancelDeletion()
+    {
+        equipmentToDelete = null;
+        focusSearch = true;
+    }
+
+    /// <summary>
+    /// Независимая копия записи, изменяемая формой.
+    /// </summary>
+    private Equipment? editingEquipment;
+
+    /// <summary>
+    /// Ошибки последней попытки сохранения.
+    /// </summary>
+    private IReadOnlyList<string> validationErrors = [];
+
+    /// <summary>
+    /// Открывает форму новой записи.
+    /// </summary>
+    private void AddEquipment()
+    {
+        editingEquipment = new Equipment { Status = Equipment.AllowedStatuses[0] };
+        validationErrors = [];
+    }
+
+    /// <summary>
+    /// Открывает независимую копию выбранной записи.
+    /// </summary>
+    private void EditEquipment(Equipment equipment)
+    {
+        editingEquipment = new Equipment
+        {
+            Id = equipment.Id,
+            Name = equipment.Name,
+            InventoryNumber = equipment.InventoryNumber,
+            Location = equipment.Location,
+            Status = equipment.Status
+        };
+        validationErrors = [];
+    }
+
+    /// <summary>
+    /// Сохраняет корректные данные и обновляет таблицу без перезагрузки.
+    /// </summary>
+    private void SaveEquipment()
+    {
+        if (editingEquipment is null)
+        {
+            return;
+        }
+
+        validationErrors = EquipmentDataService.Save(editingEquipment);
+        if (validationErrors.Count == 0)
+        {
+            allEquipment = EquipmentDataService.GetEquipment();
+            CancelEditing();
+        }
+    }
+
+    /// <summary>
+    /// Закрывает форму без изменения сохранённых данных.
+    /// </summary>
+    private void CancelEditing()
+    {
+        editingEquipment = null;
+        validationErrors = [];
+    }
+
     /// <summary>
     /// Полный список оборудования без фильтрации.
     /// </summary>

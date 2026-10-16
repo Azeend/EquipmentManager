@@ -6,6 +6,12 @@ namespace EquipmentManager.Models;
 public class Equipment
 {
     /// <summary>
+    /// Допустимые технические состояния оборудования.
+    /// </summary>
+    public static IReadOnlyList<string> AllowedStatuses { get; } =
+        Array.AsReadOnly(new[] { "Исправно", "Требует обслуживания", "Неисправно" });
+
+    /// <summary>
     /// Идентификатор оборудования.
     /// </summary>
     public int Id { get; set; }

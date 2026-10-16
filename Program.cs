@@ -6,7 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddScoped<EquipmentDataService>();
+builder.Services.AddSingleton<EquipmentDataService>();
+builder.Services.AddSingleton<FaultDataService>();
 
 var app = builder.Build();
 

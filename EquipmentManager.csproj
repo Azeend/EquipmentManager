@@ -6,4 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="EquipmentManager.Tests\**\*.cs" />
+    <Content Remove="EquipmentManager.Tests\**\*" />
+    <None Remove="EquipmentManager.Tests\**\*" />
+  </ItemGroup>
 </Project>
