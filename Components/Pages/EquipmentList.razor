@@ -1,0 +1,99 @@
+@page "/equipment"
+@using EquipmentManager.Models
+@using EquipmentManager.Services
+@inject EquipmentDataService EquipmentDataService
+
+<PageTitle>Оборудование</PageTitle>
+
+<h1>Оборудование</h1>
+
+<p>Список единиц промышленного оборудования, учтённых в системе.</p>
+
+<div class="mb-3">
+    <label for="equipment-search" class="form-label">Поиск</label>
+    <input id="equipment-search"
+           class="form-control"
+           type="search"
+           placeholder="Наименование или инвентарный номер"
+           @bind="searchQuery"
+           @bind:event="oninput" />
+</div>
+
+@if (allEquipment is null)
+{
+    <p><em>Загрузка...</em></p>
+}
+else if (FilteredEquipment.Count == 0)
+{
+    <p>Оборудование не найдено</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Инвентарный номер</th>
+                <th>Место установки</th>
+                <th>Состояние</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in FilteredEquipment)
+            {
+                <tr>
+                    <td>@item.Name</td>
+                    <td>@item.InventoryNumber</td>
+                    <td>@item.Location</td>
+                    <td>@item.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    /// <summary>
+    /// Полный список оборудования без фильтрации.
+    /// </summary>
+    private IReadOnlyList<Equipment>? allEquipment;
+
+    /// <summary>
+    /// Текст поискового запроса.
+    /// </summary>
+    private string searchQuery = string.Empty;
+
+    /// <summary>
+    /// Возвращает отфильтрованный список по наименованию и инвентарному номеру.
+    /// </summary>
+    private IReadOnlyList<Equipment> FilteredEquipment
+    {
+        get
+        {
+            if (allEquipment is null)
+            {
+                return [];
+            }
+
+            if (string.IsNullOrWhiteSpace(searchQuery))
+            {
+                return allEquipment;
+            }
+
+            string term = searchQuery.Trim();
+            return allEquipment
+                .Where(item =>
+                    item.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase)
+                    || item.InventoryNumber.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Загружает оборудование при инициализации страницы.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        allEquipment = EquipmentDataService.GetEquipment();
+    }
+}
