@@ -1,5 +1,7 @@
 # EquipmentManager
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Azeend/EquipmentManager/ci.yml?branch=master&style=flat-square&label=CI&logo=githubactions&logoColor=white)](https://github.com/Azeend/EquipmentManager/actions/workflows/ci.yml) ![.NET 9](https://img.shields.io/badge/.NET-9-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![ASP.NET Core / Blazor](https://img.shields.io/badge/ASP.NET_Core-Blazor-512BD4?style=flat-square&logo=blazor&logoColor=white) [![Render](https://img.shields.io/badge/Render-Web_Service-000000?style=flat-square&logo=render&logoColor=white)](https://equipment-manager-demo.onrender.com/) ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_%2B_Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+
 Учебное приложение для учёта промышленного оборудования, регистрации неисправностей и обслуживания. Интерфейс Blazor подключён к защищённому Backend API, данные сохраняются в Supabase PostgreSQL. Лабораторная №6 добавляет CI/CD, аудит безопасности, OAuth2, аналитику и мониторинг.
 
 [Открыть приложение](https://equipment-manager-demo.onrender.com/) · [Репозиторий GitHub](https://github.com/Azeend/EquipmentManager) · [Общая документация интеграций](integration_documentation.md)
