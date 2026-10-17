@@ -9,7 +9,7 @@ public static class HttpSecurityHeaders
         context.Response.OnStarting(() =>
         {
             context.Response.Headers.XContentTypeOptions = "nosniff";
-            context.Response.Headers["Referrer-Policy"] = "same-origin";
+            context.Response.Headers["Referrer-Policy"] = context.Request.Path == "/account/oauth/callback" ? "no-referrer" : "same-origin";
             if (context.Request.Path.StartsWithSegments("/api")
                 || context.User.Identity?.IsAuthenticated == true
                 && context.Response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) == true)

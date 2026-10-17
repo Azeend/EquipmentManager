@@ -127,23 +127,39 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         internal bool LogoutFailure { get; set; }
         internal int LoginCalls { get; private set; }
         internal int LogoutCalls { get; private set; }
+        internal string? LastGrant { get; private set; }
+        internal string? LastPayload { get; private set; }
+        internal Uri? LinkRequest { get; private set; }
+        internal bool LinkFailure { get; set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request.RequestUri!.AbsolutePath.EndsWith("/logout"))
             {
                 LogoutCalls++;
-                return Task.FromResult(new HttpResponseMessage(LogoutFailure ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.NoContent));
+                return new HttpResponseMessage(LogoutFailure ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.NoContent);
+            }
+            if (request.RequestUri.AbsolutePath.EndsWith("/user/identities/authorize"))
+            {
+                LinkRequest = request.RequestUri;
+                if (request.Headers.Authorization?.Scheme != "Bearer" || request.Headers.Authorization.Parameter != AccessToken)
+                { throw new InvalidOperationException("Привязка требует токен действующего пользователя."); }
+                return new HttpResponseMessage(LinkFailure ? HttpStatusCode.Forbidden : HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { url = "https://oauth.yandex.ru/authorize?state=synthetic-provider-state" })
+                };
             }
             LoginCalls++;
+            LastGrant = request.RequestUri.Query;
+            LastPayload = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             if (LoginException is not null) { throw LoginException; }
             if (NetworkFailure) { throw new HttpRequestException("Изолированный отказ тестового транспорта."); }
-            return Task.FromResult(new HttpResponseMessage(Status)
+            return new HttpResponseMessage(Status)
             {
                 Content = RawResponse is null
                     ? JsonContent.Create(new { access_token = AccessToken, refresh_token = "discarded-test-value" })
                     : new StringContent(RawResponse)
-            });
+            };
         }
     }
 

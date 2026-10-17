@@ -45,13 +45,15 @@ public static class UiAuthentication
         services.AddSingleton(TimeProvider.System);
         services.AddMemoryCache();
         services.AddSingleton<UiSessionStore>();
+        services.AddSingleton(configuration.GetSection("YandexOAuth").Get<YandexOAuthSettings>() ?? new());
+        services.AddSingleton<OAuthAttemptStore>();
         services.AddScoped<SupabasePasswordClient>();
         services.AddScoped<UiCookieEvents>();
         services.AddScoped<AuthenticationStateProvider, UiAuthenticationStateProvider>();
         services.AddCascadingAuthenticationState();
         services.AddScoped<SessionBackendClient>();
         // Не логируем HTTP-запросы аутентификации или заголовки access token.
-        foreach (var name in new[] { AuthClient, BackendClient })
+        foreach (var name in new[] { AuthClient, BackendClient, YandexOAuth.ClientName })
         {
             services.AddHttpClient(name, client => client.Timeout = TimeSpan.FromSeconds(15))
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })

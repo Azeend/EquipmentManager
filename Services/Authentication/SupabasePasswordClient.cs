@@ -45,16 +45,23 @@ public sealed class SupabasePasswordClient(IHttpClientFactory clients, UiAuthSet
     IOptionsMonitor<JwtBearerOptions> bearerOptions, TimeProvider clock, ILogger<SupabasePasswordClient> logger)
 {
     /// <summary>Проверяет пароль через Auth и JWT через существующие настройки доверия Backend.</summary>
-    public async Task<ValidatedUiLogin> SignInAsync(string email, string password, CancellationToken cancellationToken)
+    public Task<ValidatedUiLogin> SignInAsync(string email, string password, CancellationToken cancellationToken) =>
+        ExchangeAsync("password", new { email, password }, cancellationToken);
+
+    /// <summary>Обменивает одноразовый код PKCE и проверяет JWT той же цепочкой доверия, что и пароль.</summary>
+    public Task<ValidatedUiLogin> ExchangeCodeAsync(string code, string verifier, CancellationToken cancellationToken) =>
+        ExchangeAsync("pkce", new { auth_code = code, code_verifier = verifier }, cancellationToken);
+
+    private async Task<ValidatedUiLogin> ExchangeAsync(string grant, object payload, CancellationToken cancellationToken)
     {
         if (!settings.CanSignIn) { throw Reject("configuration", "configuration", "configuration", null); }
         var stage = "auth_request";
         int? authStatus = null;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, settings.Issuer + "/token?grant_type=password");
+            using var request = new HttpRequestMessage(HttpMethod.Post, settings.Issuer + "/token?grant_type=" + grant);
             request.Headers.Add("apikey", settings.PublishableKey);
-            request.Content = JsonContent.Create(new { email, password });
+            request.Content = JsonContent.Create(payload);
             using var response = await clients.CreateClient(UiAuthentication.AuthClient).SendAsync(request, cancellationToken);
             authStatus = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)

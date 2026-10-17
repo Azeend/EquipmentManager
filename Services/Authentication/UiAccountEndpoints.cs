@@ -8,11 +8,12 @@ namespace EquipmentManager.Services.Authentication;
 /// <summary>Выполняет вход/выход обычными POST, чтобы cookie устанавливалась до запуска SignalR.</summary>
 public static class UiAccountEndpoints
 {
-    /// <summary>Публикует только antiforgery-защищённые обработчики пользовательского сеанса.</summary>
+    /// <summary>Публикует обработчики входа/выхода и отдельный защищённый OAuth-конвейер.</summary>
     public static void MapEquipmentUiAccount(this WebApplication app)
     {
         app.MapPost("/account/login", SignInAsync).AllowAnonymous();
         app.MapPost("/account/logout", SignOutAsync).AllowAnonymous();
+        app.MapYandexOAuth();
     }
 
     /// <summary>Оставляет только локальный адрес возврата без схемы, host и обратных слешей.</summary>
@@ -41,39 +42,46 @@ public static class UiAccountEndpoints
         try
         {
             var login = await auth.SignInAsync(email, password, context.RequestAborted);
-            var userId = Guid.Parse(login.Principal.FindFirst("sub")!.Value);
-            var lookup = await profiles.GetAsync(userId, context.RequestAborted);
-            if (!lookup.Available) { return Error("profiles"); }
-            if (lookup.Profile is not { IsActive: true } profile
-                || !profile.Roles.Any(role => role is "engineer" or "maintenance_specialist" or "manager"))
-            {
-                return Error("forbidden");
-            }
-            // При повторном входе в том же браузере предыдущий локальный сеанс отзывается.
-            sessions.Remove(context.User);
-            var sessionId = sessions.Create(login.AccessToken, userId, login.ExpiresAt);
-            var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
-            {
-                new Claim("sub", userId.ToString()), new Claim(UiSessionStore.SessionClaim, sessionId),
-                new Claim(ClaimTypes.Name, login.Principal.FindFirst("email")?.Value ?? email)
-            }, UiAuthentication.Scheme));
-            try
-            {
-                await context.SignInAsync(UiAuthentication.Scheme, principal, new AuthenticationProperties
-                {
-                    IsPersistent = false,
-                    AllowRefresh = false,
-                    ExpiresUtc = sessions.Find(principal)!.ExpiresAt
-                });
-            }
-            catch
-            {
-                sessions.Remove(principal);
-                throw;
-            }
-            return Results.LocalRedirect(returnUrl);
+            return await CompleteSignInAsync(context, login, sessions, profiles, returnUrl, email);
         }
         catch (UiSignInException exception) { return Error(exception.Code); }
+    }
+
+    internal static async Task<IResult> CompleteSignInAsync(HttpContext context, ValidatedUiLogin login,
+        UiSessionStore sessions, IProfileStore profiles, string returnUrl, string fallbackName = "Пользователь")
+    {
+        IResult Error(string code) => Results.LocalRedirect("/login?error=" + code + "&returnUrl=" + Uri.EscapeDataString(returnUrl));
+        var userId = Guid.Parse(login.Principal.FindFirst("sub")!.Value);
+        var lookup = await profiles.GetAsync(userId, context.RequestAborted);
+        if (!lookup.Available) { return Error("profiles"); }
+        if (lookup.Profile is not { IsActive: true } profile
+            || !profile.Roles.Any(role => role is "engineer" or "maintenance_specialist" or "manager"))
+        {
+            return Error("forbidden");
+        }
+        // При повторном входе в том же браузере предыдущий локальный сеанс отзывается.
+        sessions.Remove(context.User);
+        var sessionId = sessions.Create(login.AccessToken, userId, login.ExpiresAt);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", userId.ToString()), new Claim(UiSessionStore.SessionClaim, sessionId),
+            new Claim(ClaimTypes.Name, login.Principal.FindFirst("email")?.Value ?? fallbackName)
+        }, UiAuthentication.Scheme));
+        try
+        {
+            await context.SignInAsync(UiAuthentication.Scheme, principal, new AuthenticationProperties
+            {
+                IsPersistent = false,
+                AllowRefresh = false,
+                ExpiresUtc = sessions.Find(principal)!.ExpiresAt
+            });
+        }
+        catch
+        {
+            sessions.Remove(principal);
+            throw;
+        }
+        return Results.LocalRedirect(returnUrl);
     }
 
     private static async Task<IResult> SignOutAsync(HttpContext context, IAntiforgery antiforgery,
@@ -89,7 +97,7 @@ public static class UiAccountEndpoints
         return Results.LocalRedirect(confirmed ? "/login?status=signed_out" : "/login?status=local_signout");
     }
 
-    private static async Task<bool> ValidateFormAsync(HttpContext context, IAntiforgery antiforgery)
+    internal static async Task<bool> ValidateFormAsync(HttpContext context, IAntiforgery antiforgery)
     {
         if (!context.Request.HasFormContentType || context.Request.ContentLength > 16384) { return false; }
         // Ограничиваем поток до разбора antiforgery: Content-Length может отсутствовать при chunked/HTTP/2.
