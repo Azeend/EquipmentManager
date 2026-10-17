@@ -42,63 +42,93 @@ public sealed class ValidatedUiLogin(ClaimsPrincipal principal, string accessTok
 
 /// <summary>Обращается к Supabase Auth по HTTPS; не сохраняет пароль и refresh token.</summary>
 public sealed class SupabasePasswordClient(IHttpClientFactory clients, UiAuthSettings settings,
-    IOptionsMonitor<JwtBearerOptions> bearerOptions, TimeProvider clock)
+    IOptionsMonitor<JwtBearerOptions> bearerOptions, TimeProvider clock, ILogger<SupabasePasswordClient> logger)
 {
     /// <summary>Проверяет пароль через Auth и JWT через существующие настройки доверия Backend.</summary>
     public async Task<ValidatedUiLogin> SignInAsync(string email, string password, CancellationToken cancellationToken)
     {
-        if (!settings.CanSignIn) { throw new UiSignInException("configuration"); }
+        if (!settings.CanSignIn) { throw Reject("configuration", "configuration", "configuration", null); }
+        var stage = "auth_request";
+        int? authStatus = null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, settings.Issuer + "/token?grant_type=password");
             request.Headers.Add("apikey", settings.PublishableKey);
             request.Content = JsonContent.Create(new { email, password });
             using var response = await clients.CreateClient(UiAuthentication.AuthClient).SendAsync(request, cancellationToken);
+            authStatus = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
             {
-                throw new UiSignInException(response.StatusCode switch
+                var code = response.StatusCode switch
                 {
                     HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "credentials",
                     HttpStatusCode.TooManyRequests => "rate_limit",
                     _ => "connection"
-                });
+                };
+                throw Reject(code, stage, code switch
+                {
+                    "credentials" => "auth_rejected",
+                    "rate_limit" => "rate_limit",
+                    _ => "auth_http_error"
+                }, authStatus);
             }
+            stage = "auth_response";
             // Refresh token даже не десериализуется в модель и не сохраняется.
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken),
                 cancellationToken: cancellationToken);
             if (!body.RootElement.TryGetProperty("access_token", out var tokenElement)
                 || tokenElement.ValueKind != JsonValueKind.String
-                || string.IsNullOrEmpty(tokenElement.GetString())) { throw new UiSignInException("connection"); }
+                || string.IsNullOrEmpty(tokenElement.GetString())) { throw Reject("connection", stage, "missing_access_token", authStatus); }
             var accessToken = tokenElement.GetString()!;
             var options = bearerOptions.Get(JwtBearerDefaults.AuthenticationScheme);
-            if (options.ConfigurationManager is null) { throw new UiSignInException("configuration"); }
+            if (options.ConfigurationManager is null) { throw Reject("configuration", stage, "jwt_configuration", authStatus); }
+            stage = "jwks";
             var configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
             var parameters = options.TokenValidationParameters.Clone();
             parameters.IssuerSigningKeys = configuration.SigningKeys;
+            stage = "jwt_validation";
             var result = await new JsonWebTokenHandler { MapInboundClaims = false }.ValidateTokenAsync(accessToken, parameters);
             if (!result.IsValid && result.Exception is SecurityTokenSignatureKeyNotFoundException)
             {
                 // При ротации ключей запрашиваем обновление доверенного JWKS; неизвестному ключу не доверяем.
                 options.ConfigurationManager.RequestRefresh();
+                stage = "jwks_refresh";
                 configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
                 parameters.IssuerSigningKeys = configuration.SigningKeys;
+                stage = "jwt_validation";
                 result = await new JsonWebTokenHandler { MapInboundClaims = false }.ValidateTokenAsync(accessToken, parameters);
             }
-            if (!result.IsValid || result.ClaimsIdentity is null) { throw new UiSignInException("credentials"); }
+            if (!result.IsValid || result.ClaimsIdentity is null) { throw Reject("credentials", stage, "jwt_validation", authStatus, result.Exception); }
+            stage = "jwt_claims";
             var principal = new ClaimsPrincipal(result.ClaimsIdentity);
             var expiresAt = new DateTimeOffset(DateTime.SpecifyKind(result.SecurityToken.ValidTo, DateTimeKind.Utc));
             if (!Guid.TryParse(principal.FindFirst("sub")?.Value, out _)
                 || principal.FindFirst("role")?.Value != "authenticated"
                 || principal.FindFirst("is_anonymous")?.Value == "true"
-                || expiresAt <= clock.GetUtcNow()) { throw new UiSignInException("credentials"); }
+                || expiresAt <= clock.GetUtcNow()) { throw Reject("credentials", stage, "jwt_claims", authStatus); }
             return new ValidatedUiLogin(principal, accessToken, expiresAt);
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException
             || exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
         {
             // Не включаем исходное исключение/ответ сервиса в отображаемую ошибку или логи.
-            throw new UiSignInException("connection");
+            var category = exception switch
+            {
+                HttpRequestException => "http_transport",
+                OperationCanceledException => "timeout",
+                JsonException => "invalid_json",
+                _ => "configuration_or_protocol"
+            };
+            throw Reject("connection", stage, category, authStatus, exception);
         }
+    }
+
+    /// <summary>Журналирует только фиксированные категории, HTTP-статус и тип исключения; ответ Auth и JWT не передаются.</summary>
+    private UiSignInException Reject(string code, string stage, string category, int? authStatus, Exception? exception = null)
+    {
+        logger.LogWarning("Отказ входа Supabase Auth. Этап: {Stage}; HTTP-статус Auth: {AuthStatus}; категория: {Category}; тип исключения: {ErrorType}",
+            stage, authStatus, category, exception?.GetType().Name ?? "none");
+        return new UiSignInException(code);
     }
 
     /// <summary>Завершает только текущий Supabase-сеанс; отказ сети не восстанавливает локальный сеанс.</summary>

@@ -24,7 +24,8 @@ internal sealed class UiAuthFixture : IAsyncDisposable
     internal TestClock Clock { get; } = new();
     internal HttpClient Client { get; private set; } = null!;
 
-    internal UiAuthFixture(bool profileAvailable = true, bool profileActive = true, string[]? roles = null)
+    internal UiAuthFixture(bool profileAvailable = true, bool profileActive = true, string[]? roles = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -53,6 +54,7 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         builder.Services.AddHttpClient("Supabase.Password").ConfigurePrimaryHttpMessageHandler(() => Auth);
         builder.Services.AddHttpClient("Equipment.Backend").ConfigurePrimaryHttpMessageHandler(() => new LocalBackendHandler(this));
         builder.Services.AddEquipmentStorage(new ConfigurationBuilder().Build(), credentials);
+        configureServices?.Invoke(builder.Services);
         App = builder.Build();
         // Только в тестовом хосте: имитируем HTTPS termination, чтобы тестировать Secure cookie без сертификата.
         App.Use((context, next) => { context.Request.Scheme = "https"; return next(context); });
@@ -119,6 +121,8 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         internal string AccessToken { get; set; } = ApiAuthFixture.CreateToken();
         internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         internal bool NetworkFailure { get; set; }
+        internal Exception? LoginException { get; set; }
+        internal string? RawResponse { get; set; }
         internal bool LogoutFailure { get; set; }
         internal int LoginCalls { get; private set; }
         internal int LogoutCalls { get; private set; }
@@ -131,10 +135,13 @@ internal sealed class UiAuthFixture : IAsyncDisposable
                 return Task.FromResult(new HttpResponseMessage(LogoutFailure ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.NoContent));
             }
             LoginCalls++;
+            if (LoginException is not null) { throw LoginException; }
             if (NetworkFailure) { throw new HttpRequestException("Изолированный отказ тестового транспорта."); }
             return Task.FromResult(new HttpResponseMessage(Status)
             {
-                Content = JsonContent.Create(new { access_token = AccessToken, refresh_token = "discarded-test-value" })
+                Content = RawResponse is null
+                    ? JsonContent.Create(new { access_token = AccessToken, refresh_token = "discarded-test-value" })
+                    : new StringContent(RawResponse)
             });
         }
     }

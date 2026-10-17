@@ -21,7 +21,7 @@ public static class UiAccountEndpoints
         && !value.Any(character => char.IsControl(character) || character == '\\') ? value : "/account/session";
 
     private static async Task<IResult> SignInAsync(HttpContext context, IAntiforgery antiforgery,
-        SupabasePasswordClient auth, UiSessionStore sessions, IProfileStore profiles)
+        SupabasePasswordClient auth, UiSessionStore sessions, IProfileStore profiles, ILoggerFactory loggerFactory)
     {
         context.Response.Headers.CacheControl = "no-store";
         if (!context.Request.IsHttps) { return Results.BadRequest("Для входа требуется HTTPS."); }
@@ -31,7 +31,12 @@ public static class UiAccountEndpoints
         IResult Error(string code) => Results.LocalRedirect("/login?error=" + code + "&returnUrl=" + Uri.EscapeDataString(returnUrl));
         var email = form["email"].ToString().Trim();
         var password = form["password"].ToString();
-        if (email.Length is 0 or > 320 || password.Length is 0 or > 4096) { return Error("credentials"); }
+        if (email.Length is 0 or > 320 || password.Length is 0 or > 4096)
+        {
+            loggerFactory.CreateLogger("EquipmentManager.Services.Authentication.UiAccountEndpoints")
+                .LogWarning("Отказ входа до Supabase Auth. Категория: invalid_form; HTTP-ответ Auth отсутствует.");
+            return Error("credentials");
+        }
         try
         {
             var login = await auth.SignInAsync(email, password, context.RequestAborted);
