@@ -1,0 +1,57 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@inject UiAuthSettings Settings
+
+<PageTitle>Вход — EquipmentManager</PageTitle>
+<h1>Вход в EquipmentManager</h1>
+<p>Используйте электронную почту и пароль существующей учётной записи Supabase.</p>
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger" role="alert">@Message(Error)</div>
+}
+@if (Status == "signed_out")
+{
+    <div class="alert alert-success" role="status">Вы вышли из приложения.</div>
+}
+else if (Status == "local_signout")
+{
+    <div class="alert alert-warning" role="status">Вы вышли из приложения. Завершение сеанса в Supabase не подтверждено из-за ошибки подключения.</div>
+}
+@if (!Settings.Enabled)
+{
+    <p role="alert">Вход временно недоступен: Supabase Auth не включён в настройках сервера.</p>
+}
+else
+{
+    <form method="post" action="/account/login" data-enhance="false" class="card card-body" style="max-width: 30rem">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@UiAccountEndpoints.LocalReturnUrl(ReturnUrl)" />
+        <label for="login-email" class="form-label">Электронная почта</label>
+        <input id="login-email" class="form-control mb-3" type="email" name="email" autocomplete="username" maxlength="320" required />
+        <label for="login-password" class="form-label">Пароль</label>
+        <input id="login-password" class="form-control mb-3" type="password" name="password" autocomplete="current-password" maxlength="4096" required />
+        <button type="submit" class="btn btn-primary">Войти</button>
+    </form>
+    <p class="text-secondary mt-3">При истечении срока сеанса потребуется повторный вход. Пароль и токены не сохраняются в хранилище браузера приложением.</p>
+}
+
+@code {
+    /// <summary>Безопасный код ошибки без ответа Auth и учётных данных.</summary>
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    /// <summary>Результат завершения сеанса.</summary>
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    /// <summary>Локальная страница возврата после успешного входа.</summary>
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private static string Message(string code) => code switch
+    {
+        "credentials" => "Не удалось войти. Проверьте электронную почту и пароль; при необходимости подтвердите почту.",
+        "connection" => "Не удалось подключиться к службе входа. Повторите попытку позже.",
+        "profiles" => "Не удалось проверить профиль пользователя. Повторите попытку позже.",
+        "forbidden" => "Для этой учётной записи нет активного профиля с разрешённой ролью. Обратитесь к администратору.",
+        "expired" => "Сеанс завершён или срок его действия истёк. Войдите снова.",
+        "rate_limit" => "Слишком много попыток входа. Подождите и повторите попытку.",
+        _ => "Вход временно недоступен. Проверьте настройки сервера или обратитесь к администратору."
+    };
+}

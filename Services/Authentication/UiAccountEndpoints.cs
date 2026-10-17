@@ -1,0 +1,94 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
+
+namespace EquipmentManager.Services.Authentication;
+
+/// <summary>Выполняет вход/выход обычными POST, чтобы cookie устанавливалась до запуска SignalR.</summary>
+public static class UiAccountEndpoints
+{
+    /// <summary>Публикует только antiforgery-защищённые обработчики пользовательского сеанса.</summary>
+    public static void MapEquipmentUiAccount(this WebApplication app)
+    {
+        app.MapPost("/account/login", SignInAsync).AllowAnonymous();
+        app.MapPost("/account/logout", SignOutAsync).AllowAnonymous();
+    }
+
+    /// <summary>Оставляет только локальный адрес возврата без схемы, host и обратных слешей.</summary>
+    public static string LocalReturnUrl(string? value) =>
+        !string.IsNullOrEmpty(value) && value[0] == '/'
+        && (value.Length == 1 || value[1] is not ('/' or '\\'))
+        && !value.Any(character => char.IsControl(character) || character == '\\') ? value : "/account/session";
+
+    private static async Task<IResult> SignInAsync(HttpContext context, IAntiforgery antiforgery,
+        SupabasePasswordClient auth, UiSessionStore sessions, IProfileStore profiles)
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        if (!context.Request.IsHttps) { return Results.BadRequest("Для входа требуется HTTPS."); }
+        if (!await ValidateFormAsync(context, antiforgery)) { return Results.BadRequest("Форма устарела. Перезагрузите страницу входа."); }
+        var form = await context.Request.ReadFormAsync(context.RequestAborted);
+        var returnUrl = LocalReturnUrl(form["returnUrl"]);
+        IResult Error(string code) => Results.LocalRedirect("/login?error=" + code + "&returnUrl=" + Uri.EscapeDataString(returnUrl));
+        var email = form["email"].ToString().Trim();
+        var password = form["password"].ToString();
+        if (email.Length is 0 or > 320 || password.Length is 0 or > 4096) { return Error("credentials"); }
+        try
+        {
+            var login = await auth.SignInAsync(email, password, context.RequestAborted);
+            var userId = Guid.Parse(login.Principal.FindFirst("sub")!.Value);
+            var lookup = await profiles.GetAsync(userId, context.RequestAborted);
+            if (!lookup.Available) { return Error("profiles"); }
+            if (lookup.Profile is not { IsActive: true } profile
+                || !profile.Roles.Any(role => role is "engineer" or "maintenance_specialist" or "manager"))
+            {
+                return Error("forbidden");
+            }
+            // При повторном входе в том же браузере предыдущий локальный сеанс отзывается.
+            sessions.Remove(context.User);
+            var sessionId = sessions.Create(login.AccessToken, userId, login.ExpiresAt);
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim("sub", userId.ToString()), new Claim(UiSessionStore.SessionClaim, sessionId),
+                new Claim(ClaimTypes.Name, login.Principal.FindFirst("email")?.Value ?? email)
+            }, UiAuthentication.Scheme));
+            try
+            {
+                await context.SignInAsync(UiAuthentication.Scheme, principal, new AuthenticationProperties
+                {
+                    IsPersistent = false, AllowRefresh = false, ExpiresUtc = sessions.Find(principal)!.ExpiresAt
+                });
+            }
+            catch
+            {
+                sessions.Remove(principal);
+                throw;
+            }
+            return Results.LocalRedirect(returnUrl);
+        }
+        catch (UiSignInException exception) { return Error(exception.Code); }
+    }
+
+    private static async Task<IResult> SignOutAsync(HttpContext context, IAntiforgery antiforgery,
+        SupabasePasswordClient auth, UiSessionStore sessions)
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        if (!context.Request.IsHttps) { return Results.BadRequest("Для выхода требуется HTTPS."); }
+        if (!await ValidateFormAsync(context, antiforgery)) { return Results.BadRequest("Форма устарела. Перезагрузите страницу."); }
+        var session = sessions.Find(context.User);
+        sessions.Remove(context.User);
+        await context.SignOutAsync(UiAuthentication.Scheme);
+        var confirmed = session is null || await auth.SignOutAsync(session.AccessToken, context.RequestAborted);
+        return Results.LocalRedirect(confirmed ? "/login?status=signed_out" : "/login?status=local_signout");
+    }
+
+    private static async Task<bool> ValidateFormAsync(HttpContext context, IAntiforgery antiforgery)
+    {
+        if (!context.Request.HasFormContentType || context.Request.ContentLength > 16384) { return false; }
+        try
+        {
+            await antiforgery.ValidateRequestAsync(context);
+            return true;
+        }
+        catch (AntiforgeryValidationException) { return false; }
+    }
+}

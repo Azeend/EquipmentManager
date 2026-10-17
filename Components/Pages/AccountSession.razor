@@ -1,0 +1,45 @@
+@page "/account/session"
+@inject SessionBackendClient Backend
+@inject NavigationManager Navigation
+
+<PageTitle>Сеанс — EquipmentManager</PageTitle>
+<h1>Пользовательский сеанс</h1>
+<AuthorizeView>
+    <Authorized Context="session"><p>Вход выполнен: @session.User.Identity?.Name</p></Authorized>
+</AuthorizeView>
+<p>Сеанс действует до истечения access token, но не более восьми часов. Затем потребуется повторный вход.</p>
+<p>Проверка ниже обращается к существующему Backend API с серверным Bearer-токеном и не изменяет оборудование.</p>
+<button class="btn btn-primary" disabled="@loading" @onclick="CheckApiAsync">Проверить доступ к API</button>
+@if (message is not null) { <p class="mt-3" role="status">@message</p> }
+
+@code {
+    private bool loading;
+    private string? message;
+
+    /// <summary>Проверяет реальный HTTP-запрос с токеном текущего серверного сеанса.</summary>
+    private async Task CheckApiAsync()
+    {
+        loading = true;
+        try
+        {
+            var equipment = await Backend.GetEquipmentAsync();
+            message = $"API доступен. Получено записей оборудования: {equipment.Count}.";
+        }
+        catch (UiSignInException exception)
+        {
+            if (exception.Code == "expired") { Navigation.NavigateTo("/login?error=expired", forceLoad: true); }
+            message = exception.Code switch
+            {
+                "forbidden" => "Недостаточно прав для чтения оборудования.",
+                "backend_configuration" => "На сервере не настроен HTTPS-адрес Backend API.",
+                _ => "Backend API недоступен. Проверьте подключение и повторите попытку."
+            };
+        }
+        catch (BackendApiException exception) { message = exception.Message; }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            message = "Не удалось получить ответ Backend API. Повторите попытку позже.";
+        }
+        finally { loading = false; }
+    }
+}

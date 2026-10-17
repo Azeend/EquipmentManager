@@ -29,16 +29,23 @@ public class EquipmentDataService
     /// Проверяет и сохраняет копию записи в памяти; возвращает ошибки без изменения данных.
     /// </summary>
     public IReadOnlyList<string> Save(Equipment equipment)
+        => SaveWithResult(equipment).Errors;
+
+    /// <summary>
+    /// Атомарно проверяет и сохраняет запись, возвращая причину отказа или копию с назначенным ID.
+    /// </summary>
+    public EquipmentSaveResult SaveWithResult(Equipment equipment)
     {
         ArgumentNullException.ThrowIfNull(equipment);
         var candidate = Clone(equipment);
-        candidate.Name = candidate.Name.Trim();
-        candidate.InventoryNumber = candidate.InventoryNumber.Trim();
-        candidate.Location = candidate.Location.Trim();
+        candidate.Name = (candidate.Name ?? string.Empty).Trim();
+        candidate.InventoryNumber = (candidate.InventoryNumber ?? string.Empty).Trim();
+        candidate.Location = (candidate.Location ?? string.Empty).Trim();
 
         lock (syncRoot)
         {
             var errors = validator.Validate(candidate);
+            var hasValidationErrors = errors.Count > 0;
             if (equipmentItems.Any(item => item.Id != candidate.Id
                 && string.Equals(item.InventoryNumber, candidate.InventoryNumber, StringComparison.OrdinalIgnoreCase)))
             {
@@ -53,7 +60,10 @@ public class EquipmentDataService
 
             if (errors.Count > 0)
             {
-                return errors;
+                var status = candidate.Id != 0 && index < 0
+                    ? EquipmentSaveStatus.NotFound
+                    : hasValidationErrors ? EquipmentSaveStatus.Invalid : EquipmentSaveStatus.Conflict;
+                return new EquipmentSaveResult(status, null, errors);
             }
 
             if (candidate.Id == 0)
@@ -66,7 +76,7 @@ public class EquipmentDataService
                 equipmentItems[index] = candidate;
             }
 
-            return [];
+            return new EquipmentSaveResult(EquipmentSaveStatus.Saved, Clone(candidate), []);
         }
     }
 

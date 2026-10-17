@@ -6,7 +6,19 @@
     <div class="workspace">
         <header class="top-row">
             <div><span class="context-label">Предприятие</span><strong>Управление оборудованием</strong></div>
-            <span class="session-status">Вход не подключён</span>
+            <AuthorizeView>
+                <Authorized Context="session">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="session-status">@session.User.Identity?.Name</span>
+                        <a href="account/session">Сеанс</a>
+                        <form method="post" action="/account/logout" data-enhance="false">
+                            <AntiforgeryToken />
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Выйти</button>
+                        </form>
+                    </div>
+                </Authorized>
+                <NotAuthorized><a href="login" data-enhance-nav="false">Войти</a></NotAuthorized>
+            </AuthorizeView>
         </header>
         <main id="main-content" tabindex="-1" @ref="mainContent">
             <article class="content">@Body</article>

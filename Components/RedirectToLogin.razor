@@ -1,0 +1,15 @@
+@inject NavigationManager Navigation
+
+<p role="alert">Сеанс завершён. <a href="/login?error=expired" data-enhance-nav="false">Войдите снова</a>.</p>
+
+@code {
+    /// <summary>Пересоздаёт circuit обычной навигацией после истечения или отзыва сеанса.</summary>
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var returnUrl = UiAccountEndpoints.LocalReturnUrl("/" + Navigation.ToBaseRelativePath(Navigation.Uri));
+            Navigation.NavigateTo("/login?error=expired&returnUrl=" + Uri.EscapeDataString(returnUrl), forceLoad: true);
+        }
+    }
+}

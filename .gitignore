@@ -11,6 +11,10 @@
 *.binlog
 *.nupkg
 *.snupkg
+*.trx
+*.coverage
+*.coveragexml
+*.dmp
 
 # Пользовательские настройки IDE
 *.user
@@ -39,6 +43,7 @@ appsettings.Local.json
 appsettings.*.Local.json
 secrets.json
 secrets.*.json
+*.http.user
 **/[Ss]ecrets/
 *.pfx
 *.p12

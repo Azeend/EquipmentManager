@@ -1,7 +1,9 @@
 @page "/equipment"
 @using EquipmentManager.Models
 @using EquipmentManager.Services
-@inject EquipmentDataService EquipmentDataService
+@inject SessionBackendClient Backend
+@inject NavigationManager Navigation
+@inject StorageSettings Storage
 
 <PageTitle>Оборудование</PageTitle>
 
@@ -9,7 +11,11 @@
 
 <p>Список единиц промышленного оборудования, учтённых в системе.</p>
 
-<button type="button" class="btn btn-primary mb-3" @onclick="AddEquipment">Добавить оборудование</button>
+@if (permissions.CanManageEquipment)
+{
+    <button type="button" class="btn btn-primary mb-3" disabled="@(busy || loading)" @onclick="AddEquipment">Добавить оборудование</button>
+}
+<p class="text-secondary">@(Storage.Provider == StorageProvider.InMemory ? "Учебные данные хранятся в памяти до перезапуска." : "Данные сохраняются после перезапуска приложения.")</p>
 
 @if (deletionMessage is not null)
 {
@@ -23,8 +29,8 @@
             <h2 id="delete-equipment-title" class="h4">Подтверждение удаления</h2>
             <p id="delete-equipment-description">Удалить оборудование «@equipmentToDelete.Name»?</p>
             <div class="d-flex flex-wrap gap-2">
-                <button type="button" class="btn btn-danger" @onclick="ConfirmDeletion">Удалить</button>
-                <button type="button" class="btn btn-secondary" @onclick="CancelDeletion">Отмена</button>
+                <button type="button" class="btn btn-danger" disabled="@busy" @onclick="ConfirmDeletion">Удалить</button>
+                <button type="button" class="btn btn-secondary" disabled="@busy" @onclick="CancelDeletion">Отмена</button>
             </div>
         </div>
     </section>
@@ -69,8 +75,8 @@
                     </InputSelect>
                 </div>
                 <div class="col-12 d-flex flex-wrap gap-2">
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <button type="button" class="btn btn-secondary" @onclick="CancelEditing">Отмена</button>
+                    <button type="submit" class="btn btn-primary" disabled="@busy">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" disabled="@busy" @onclick="CancelEditing">Отмена</button>
                 </div>
             </div>
         </EditForm>
@@ -93,7 +99,11 @@
     var filteredEquipment = FilteredEquipment;
 }
 
-@if (allEquipment is null)
+@if (loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@loadError <button class="btn btn-outline-danger" @onclick="LoadDataAsync">Повторить</button></div>
+}
+else if (loading || allEquipment is null)
 {
     <p><em>Загрузка...</em></p>
 }
@@ -127,10 +137,13 @@ else
                     <td>@item.Location</td>
                     <td>@item.Status</td>
                     <td>
+                        @if (permissions.CanManageEquipment)
+                        {
                         <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => EditEquipment(item)" aria-label="@($"Редактировать {item.Name}")">Редактировать</button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeletion(item)" aria-label="@($"Удалить {item.Name}")">Удалить</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(busy || loading)" @onclick="() => EditEquipment(item)" aria-label="@($"Редактировать {item.Name}")">Редактировать</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" disabled="@(busy || loading)" @onclick="() => RequestDeletion(item)" aria-label="@($"Удалить {item.Name}")">Удалить</button>
                         </div>
+                        }
                     </td>
                 </tr>
             }
@@ -140,6 +153,10 @@ else
 }
 
 @code {
+    private ApplicationPermissions permissions = new(false, false, false);
+    private bool busy;
+    private bool loading;
+    private string? loadError;
     private ElementReference deletionDialog;
     private ElementReference searchInput;
     private bool focusDeletionDialog;
@@ -183,26 +200,26 @@ else
     /// <summary>
     /// Удаляет выбранную запись и обновляет таблицу с сохранением поискового запроса.
     /// </summary>
-    private void ConfirmDeletion()
+    private async Task ConfirmDeletion()
     {
-        if (equipmentToDelete is null)
+        if (equipmentToDelete is null || busy)
         {
             return;
         }
 
         var equipment = equipmentToDelete;
-        var deleted = EquipmentDataService.Delete(equipment.Id);
-        allEquipment = EquipmentDataService.GetEquipment();
-        deletionMessage = deleted
-            ? $"Оборудование «{equipment.Name}» удалено."
-            : $"Оборудование «{equipment.Name}» уже отсутствует. Список обновлён.";
-
-        if (editingEquipment?.Id == equipment.Id)
+        busy = true;
+        try
         {
-            CancelEditing();
+            await Backend.DeleteEquipmentAsync(equipment.Id);
+            deletionMessage = $"Оборудование «{equipment.Name}» удалено.";
+            if (editingEquipment?.Id == equipment.Id) { CancelEditing(); }
+            CancelDeletion();
+            await LoadDataAsync();
         }
-
-        CancelDeletion();
+        catch (BackendApiException exception) { deletionMessage = exception.Message; }
+        catch (UiSignInException exception) { deletionMessage = SignInError(exception); }
+        finally { busy = false; }
     }
 
     /// <summary>
@@ -252,19 +269,23 @@ else
     /// <summary>
     /// Сохраняет корректные данные и обновляет таблицу без перезагрузки.
     /// </summary>
-    private void SaveEquipment()
+    private async Task SaveEquipment()
     {
-        if (editingEquipment is null)
+        if (editingEquipment is null || busy)
         {
             return;
         }
 
-        validationErrors = EquipmentDataService.Save(editingEquipment);
-        if (validationErrors.Count == 0)
+        busy = true;
+        try
         {
-            allEquipment = EquipmentDataService.GetEquipment();
+            await Backend.SaveEquipmentAsync(editingEquipment);
             CancelEditing();
+            await LoadDataAsync();
         }
+        catch (BackendApiException exception) { validationErrors = exception.Errors; }
+        catch (UiSignInException exception) { validationErrors = [SignInError(exception)]; }
+        finally { busy = false; }
     }
 
     /// <summary>
@@ -315,8 +336,26 @@ else
     /// <summary>
     /// Загружает оборудование при инициализации страницы.
     /// </summary>
-    protected override void OnInitialized()
+    protected override Task OnInitializedAsync() => LoadDataAsync();
+
+    /// <summary>Загружает данные и права через API, отличая сбой от пустого реестра.</summary>
+    private async Task LoadDataAsync()
     {
-        allEquipment = EquipmentDataService.GetEquipment();
+        loading = true;
+        loadError = null;
+        try
+        {
+            permissions = await Backend.GetPermissionsAsync();
+            allEquipment = await Backend.GetEquipmentAsync();
+        }
+        catch (BackendApiException exception) { loadError = exception.Message; }
+        catch (UiSignInException exception) { loadError = SignInError(exception); }
+        finally { loading = false; }
+    }
+
+    private string SignInError(UiSignInException exception)
+    {
+        if (exception.Code == "expired") { Navigation.NavigateTo("/login?error=expired&returnUrl=%2Fequipment", forceLoad: true); }
+        return exception.Code == "forbidden" ? "Недостаточно прав для выполнения операции." : "Сеанс завершён либо Backend API не настроен. Войдите снова или проверьте настройки подключения.";
     }
 }

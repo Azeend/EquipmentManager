@@ -50,40 +50,68 @@ public sealed class FaultDataService
 
     /// <summary>Регистрирует заявку после проверки описания и оборудования.</summary>
     public IReadOnlyList<string> Register(FaultRegistration registration)
+        => RegisterWithResult(registration).Errors;
+
+    /// <summary>Регистрирует заявку и атомарно возвращает назначенный ID и тип отказа для API.</summary>
+    public FaultWriteResult RegisterWithResult(FaultRegistration registration, string? author = null)
     {
         ArgumentNullException.ThrowIfNull(registration);
         var errors = Validate(registration);
         lock (syncRoot)
         {
             var equipment = equipmentDataService.GetEquipment().FirstOrDefault(item => item.Id == registration.EquipmentId);
-            if (equipment is null) { errors.Add("Выбранное оборудование недоступно. Обновите список оборудования."); }
-            if (errors.Count > 0 || equipment is null) { return errors; }
-            faults.Add(new Fault
+            if (errors.Count > 0) { return new(FaultWriteStatus.Invalid, null, errors); }
+            if (equipment is null) { return new(FaultWriteStatus.NotFound, null, ["Выбранное оборудование недоступно. Обновите список оборудования."]); }
+            var fault = new Fault
             {
                 Id = nextId++, EquipmentId = equipment.Id,
                 EquipmentLabel = $"{equipment.Name} ({equipment.InventoryNumber})",
-                Description = registration.Description.Trim(), CreatedAt = DateTimeOffset.UtcNow
-            });
-            return [];
+                Description = registration.Description.Trim(), CreatedAt = DateTimeOffset.UtcNow,
+                Author = author ?? "Не установлен (без авторизации)"
+            };
+            faults.Add(fault);
+            return new(FaultWriteStatus.Saved, fault, []);
+        }
+    }
+
+    /// <summary>Удаляет через API только несвязанное оборудование; блокировка общая с регистрацией заявки.</summary>
+    public EquipmentDeleteStatus DeleteEquipment(int equipmentId)
+    {
+        lock (syncRoot)
+        {
+            if (!equipmentDataService.GetEquipment().Any(item => item.Id == equipmentId))
+            {
+                return EquipmentDeleteStatus.NotFound;
+            }
+            if (faults.Any(item => item.EquipmentId == equipmentId)
+                || maintenanceRecords.Values.Any(item => item.EquipmentId == equipmentId))
+            {
+                return EquipmentDeleteStatus.Linked;
+            }
+            return equipmentDataService.Delete(equipmentId) ? EquipmentDeleteStatus.Deleted : EquipmentDeleteStatus.NotFound;
         }
     }
 
     /// <summary>Разрешает только последовательные переходы с проверкой версии и полей завершения.</summary>
     public IReadOnlyList<string> ChangeStatus(int id, int expectedVersion, string targetStatus, FaultCompletion? completion = null)
+        => ChangeStatusWithResult(id, expectedVersion, targetStatus, completion).Errors;
+
+    /// <summary>Возвращает типизированный результат прежней атомарной смены статуса в памяти.</summary>
+    public FaultWriteResult ChangeStatusWithResult(int id, int expectedVersion, string targetStatus, FaultCompletion? completion = null)
     {
         lock (syncRoot)
         {
             var index = faults.FindIndex(item => item.Id == id);
-            if (index < 0) { return ["Заявка больше не существует. Обновите список."]; }
+            if (index < 0) { return new(FaultWriteStatus.NotFound, null, ["Заявка больше не существует. Обновите список."]); }
             var fault = faults[index];
-            if (fault.Version != expectedVersion) { return ["Заявка изменена в другом сеансе. Обновите данные; черновик работ сохранён в форме."]; }
+            if (fault.Version != expectedVersion) { return new(FaultWriteStatus.Conflict, null, ["Заявка изменена в другом сеансе. Обновите данные; черновик работ сохранён в форме."]); }
             if (!((fault.Status == "Новая" && targetStatus == "В работе") || (fault.Status == "В работе" && targetStatus == "Завершена")))
-            { return ["Недопустимый переход статуса. Разрешено: Новая → В работе → Завершена."]; }
+            { return new(FaultWriteStatus.InvalidTransition, null, ["Недопустимый переход статуса. Разрешено: Новая → В работе → Завершена."]); }
             if (targetStatus == "Завершена")
             {
-                if (completion is null) { return ["Укажите описание работ и результат."]; }
+                if (completion is null) { return new(FaultWriteStatus.Invalid, null, ["Укажите описание работ и результат."]); }
                 var errors = Validate(completion);
-                if (errors.Count > 0) { return errors; }
+                if (errors.Count > 0) { return new(FaultWriteStatus.Invalid, null, errors); }
                 var completedFault = fault with
                 {
                     Status = targetStatus, Version = fault.Version + 1, CompletedAt = DateTimeOffset.UtcNow,
@@ -101,7 +129,7 @@ public sealed class FaultDataService
                 // До добавления истории статус не меняется; оба изменения скрыты общей блокировкой.
                 if (!maintenanceRecords.TryAdd(fault.Id, record))
                 {
-                    return ["Для заявки уже существует запись истории. Обновите данные."];
+                    return new(FaultWriteStatus.Conflict, null, ["Для заявки уже существует запись истории. Обновите данные."]);
                 }
                 faults[index] = completedFault;
             }
@@ -109,7 +137,7 @@ public sealed class FaultDataService
             {
                 faults[index] = fault with { Status = targetStatus, Version = fault.Version + 1, StartedAt = DateTimeOffset.UtcNow };
             }
-            return [];
+            return new(FaultWriteStatus.Saved, faults[index], []);
         }
     }
 

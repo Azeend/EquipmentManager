@@ -1,12 +1,13 @@
 @page "/faults"
 @using EquipmentManager.Models
 @using EquipmentManager.Services
-@inject FaultDataService FaultDataService
-@inject EquipmentDataService EquipmentDataService
+@inject SessionBackendClient Backend
+@inject NavigationManager Navigation
+@inject StorageSettings Storage
 
 <PageTitle>Заявки — EquipmentManager</PageTitle>
 <h1>Заявки на устранение неисправностей</h1>
-<p class="text-secondary">Учебный режим с тестовыми заявками. Авторизация и проверка ролей не подключены; автор и исполнитель не определяются. Данные хранятся в памяти до перезапуска приложения. Даты указаны в UTC.</p>
+<p class="text-secondary">@(Storage.Provider == StorageProvider.InMemory ? "Учебные данные хранятся в памяти до перезапуска." : "Данные сохраняются после перезапуска приложения.") Даты указаны в UTC.</p>
 @if (errors.Count > 0)
 {
     <div class="alert alert-danger" role="alert"><ul class="mb-0">
@@ -14,6 +15,8 @@
     </ul></div>
 }
 @if (message is not null) { <div class="alert alert-success" role="status">@message</div> }
+@if (permissions.CanRegisterFault)
+{
 <section class="card card-body mb-3" aria-labelledby="registration-title">
     <h2 id="registration-title" class="h4">Регистрация неисправности</h2>
     @if (equipment.Count == 0) { <p>Нет оборудования. Сначала добавьте его в реестр.</p> }
@@ -35,14 +38,15 @@
                 <ValidationMessage For="() => registration.Description" />
             </div>
             <div class="col-12 d-flex flex-wrap gap-2">
-                <button type="submit" class="btn btn-primary" disabled="@(equipment.Count == 0)">Зарегистрировать</button>
-                <button type="button" class="btn btn-secondary" @onclick="ResetRegistration">Отмена</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="Refresh">Обновить данные</button>
+                <button type="submit" class="btn btn-primary" disabled="@(equipment.Count == 0 || busy || loading)">Зарегистрировать</button>
+                <button type="button" class="btn btn-secondary" disabled="@(busy || loading)" @onclick="ResetRegistration">Отмена</button>
             </div>
         </div>
     </EditForm>
 </section>
-@if (selectedFault is not null)
+}
+<button type="button" class="btn btn-outline-secondary mb-3" disabled="@(busy || loading)" @onclick="Refresh">Обновить данные</button>
+@if (selectedFault is not null && permissions.CanProcessFaults)
 {
     <section class="card card-body mb-3" aria-labelledby="completion-title">
         <h2 id="completion-title" class="h4">Завершение заявки №@selectedFault.Id</h2>
@@ -57,13 +61,15 @@
             <InputTextArea id="fault-result" class="form-control" @bind-Value="completion.Result" aria-required="true" />
             <ValidationMessage For="() => completion.Result" />
             <div class="d-flex flex-wrap gap-2 mt-3">
-                <button type="submit" class="btn btn-primary">Завершить</button>
-                <button type="button" class="btn btn-secondary" @onclick="CancelCompletion">Отмена</button>
+                <button type="submit" class="btn btn-primary" disabled="@(busy || loading)">Завершить</button>
+                <button type="button" class="btn btn-secondary" disabled="@(busy || loading)" @onclick="CancelCompletion">Отмена</button>
             </div>
         </EditForm>
     </section>
 }
-@if (faults.Count == 0) { <p>Заявок пока нет.</p> }
+@if (loading) { <p>Загрузка...</p> }
+else if (loadError is not null) { <div class="alert alert-danger" role="alert">@loadError</div> }
+else if (faults.Count == 0) { <p>Заявок пока нет.</p> }
 else
 {
     <div class="table-responsive border rounded bg-white" role="region" aria-label="Очередь заявок" tabindex="0">
@@ -77,11 +83,12 @@ else
                         <td>@fault.Author<br />Создана: @FormatDate(fault.CreatedAt)<br />Начата: @FormatDate(fault.StartedAt)<br />Завершена: @FormatDate(fault.CompletedAt)</td>
                         <td>@fault.WorkDescription<br />@fault.Result</td>
                         <td>
-                            @if (fault.Status == "Новая")
-                            { <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => Start(fault)">Взять в работу</button> }
+                            @if (fault.Status == "Завершена") { <span>Обработка завершена</span> }
+                            else if (!permissions.CanProcessFaults) { <span>Доступно специалисту</span> }
+                            else if (fault.Status == "Новая")
+                            { <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(busy || loading)" @onclick="() => Start(fault)">Взять в работу</button> }
                             else if (fault.Status == "В работе")
-                            { <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => BeginCompletion(fault)">Завершить</button> }
-                            else { <span>Обработка завершена</span> }
+                            { <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(busy || loading)" @onclick="() => BeginCompletion(fault)">Завершить</button> }
                         </td>
                     </tr>
                 }
@@ -94,38 +101,43 @@ else
     private IReadOnlyList<Equipment> equipment = [];
     private IReadOnlyList<Fault> faults = [];
     private IReadOnlyList<string> errors = [];
+    private ApplicationPermissions permissions = new(false, false, false);
     private FaultRegistration registration = new();
     private FaultCompletion completion = new();
     private Fault? selectedFault;
     private string? message;
+    private string? loadError;
+    private bool loading;
+    private bool busy;
 
-    /// <summary>Загружает данные при открытии страницы.</summary>
-    protected override void OnInitialized() => Refresh();
+    /// <summary>Загружает API-данные после установления серверного пользовательского сеанса.</summary>
+    protected override Task OnInitializedAsync() => Refresh();
 
-    /// <summary>Обновляет очередь и выбор оборудования, сохраняя черновики.</summary>
-    private void Refresh()
+    /// <summary>Обновляет очередь и список оборудования, сохраняя черновики.</summary>
+    private async Task Refresh()
     {
-        equipment = EquipmentDataService.GetEquipment();
-        faults = FaultDataService.GetFaults();
-        if (selectedFault is not null)
+        loading = true;
+        loadError = null;
+        try
         {
-            var id = selectedFault.Id;
-            selectedFault = faults.FirstOrDefault(item => item.Id == id) ?? selectedFault;
+            permissions = await Backend.GetPermissionsAsync();
+            var currentEquipment = await Backend.GetEquipmentAsync();
+            var currentFaults = await Backend.GetFaultsAsync();
+            equipment = currentEquipment;
+            faults = currentFaults;
+            if (selectedFault is not null)
+            {
+                selectedFault = faults.FirstOrDefault(item => item.Id == selectedFault.Id) ?? selectedFault;
+            }
         }
+        catch (BackendApiException exception) { loadError = exception.Message; }
+        catch (UiSignInException exception) { loadError = SignInError(exception); }
+        finally { loading = false; }
     }
 
-    /// <summary>Регистрирует заявку, очищая ввод только при успехе.</summary>
-    private void Register()
-    {
-        message = null;
-        errors = FaultDataService.Register(registration);
-        if (errors.Count == 0)
-        {
-            registration = new();
-            message = "Заявка зарегистрирована со статусом «Новая».";
-        }
-        Refresh();
-    }
+    /// <summary>Отправляет регистрацию и очищает форму только после подтверждённого успеха.</summary>
+    private Task Register() => RunCommandAsync(() => Backend.RegisterFaultAsync(registration),
+        "Заявка зарегистрирована со статусом «Новая».", () => registration = new());
 
     /// <summary>Отменяет ввод без сохранения.</summary>
     private void ResetRegistration()
@@ -135,19 +147,11 @@ else
         message = null;
     }
 
-    /// <summary>Переводит новую заявку в работу.</summary>
-    private void Start(Fault fault)
-    {
-        message = null;
-        errors = FaultDataService.ChangeStatus(fault.Id, fault.Version, "В работе");
-        if (errors.Count == 0)
-        {
-            message = $"Заявка №{fault.Id} взята в работу.";
-        }
-        Refresh();
-    }
+    /// <summary>Передаёт API ожидаемую версию заявки для начала работ.</summary>
+    private Task Start(Fault fault) => RunCommandAsync(() => Backend.StartFaultAsync(fault),
+        $"Заявка №{fault.Id} взята в работу.");
 
-    /// <summary>Открывает черновик завершения выбранной заявки.</summary>
+    /// <summary>Открывает прежнюю форму завершения заявки.</summary>
     private void BeginCompletion(Fault fault)
     {
         selectedFault = fault;
@@ -156,21 +160,41 @@ else
         message = null;
     }
 
-    /// <summary>Сохраняет статус и сведения о выполненных работах одной командой.</summary>
-    private void Complete()
+    /// <summary>Отправляет одну команду завершения, не создавая историю на Frontend.</summary>
+    private Task Complete()
     {
-        if (selectedFault is null)
+        var fault = selectedFault;
+        return fault is null ? Task.CompletedTask : RunCommandAsync(() => Backend.CompleteFaultAsync(fault, completion),
+            $"Заявка №{fault.Id} завершена.", CancelCompletion);
+    }
+
+    /// <summary>Выполняет команду без автоматического повтора и сохраняет черновик при отказе.</summary>
+    private async Task RunCommandAsync(Func<Task> command, string success, Action? afterSuccess = null)
+    {
+        if (busy) { return; }
+        busy = true;
+        message = null;
+        errors = [];
+        try
         {
+            await command();
+            afterSuccess?.Invoke();
+            message = success;
+        }
+        catch (BackendApiException exception) { errors = exception.Errors; }
+        catch (UiSignInException exception)
+        {
+            errors = [SignInError(exception)];
             return;
         }
-        message = null;
-        errors = FaultDataService.ChangeStatus(selectedFault.Id, selectedFault.Version, "Завершена", completion);
-        if (errors.Count == 0)
-        {
-            message = $"Заявка №{selectedFault.Id} завершена.";
-            CancelCompletion();
-        }
-        Refresh();
+        finally { busy = false; }
+        await Refresh();
+    }
+
+    private string SignInError(UiSignInException exception)
+    {
+        if (exception.Code == "expired") { Navigation.NavigateTo("/login?error=expired&returnUrl=%2Ffaults", forceLoad: true); }
+        return exception.Code == "forbidden" ? "Недостаточно прав для выполнения операции." : "Сеанс завершён либо Backend API не настроен.";
     }
 
     /// <summary>Отменяет завершение без изменения заявки.</summary>

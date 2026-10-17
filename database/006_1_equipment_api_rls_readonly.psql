@@ -1,0 +1,134 @@
+-- Ручные тесты ПОСЛЕ миграции. Только read-only транзакции, без DML/nextval.
+-- Запускать psql под настоящим equipment_api с VerifyFull, не под владельцем.
+-- UUID вводит администратор тестового стенда; это не способ передачи UUID из HTTP.
+-- Файл предназначен для psql, а не SQL Editor (содержит команды \prompt и \set).
+\set ON_ERROR_STOP on
+\prompt 'Existing active test engineer UUID: ' engineer_id
+\prompt 'Existing active manager/specialist UUID without engineer: ' reader_id
+
+BEGIN READ ONLY;
+DO $$
+BEGIN
+    IF current_user <> 'equipment_api'
+        OR NOT row_security_active('public.equipment'::regclass)
+        OR NOT row_security_active('public.profiles'::regclass) THEN
+        RAISE EXCEPTION 'Tests require actual equipment_api with active RLS';
+    END IF;
+    IF equipment_api_security.current_profile_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'Unexpected pre-existing session context; reconnect and audit the client';
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.equipment) OR EXISTS (SELECT 1 FROM public.profiles) THEN
+        RAISE EXCEPTION 'Rows are visible without context';
+    END IF;
+END;
+$$;
+SELECT 'No context: RLS denied rows' AS test_result;
+ROLLBACK;
+
+-- Параметр PREPARE, а не конкатенация SQL в приложении. psql :'var' экранирует литерал.
+-- В Npgsql PREPARE/EXECUTE не нужны: команда использует обычный параметр $1.
+PREPARE em_audit_context(text) AS
+    SELECT set_config('equipment.user_id', $1, true) IS NOT NULL AS context_set;
+
+BEGIN READ ONLY;
+EXECUTE em_audit_context(:'engineer_id');
+DO $$
+BEGIN
+    IF NOT equipment_api_security.has_any_role(ARRAY['engineer']::text[]) THEN
+        RAISE EXCEPTION 'Provided profile is not an active engineer';
+    END IF;
+    IF (SELECT count(*) FROM public.profiles) <> 1
+        OR EXISTS (SELECT 1 FROM public.profiles
+            WHERE id <> equipment_api_security.current_profile_id()) THEN
+        RAISE EXCEPTION 'Own-profile RLS failed';
+    END IF;
+END;
+$$;
+SELECT count(*) AS engineer_visible_equipment FROM public.equipment;
+-- Проверяет сброс после COMMIT, но эта транзакция не изменяет данные.
+COMMIT;
+
+BEGIN READ ONLY;
+DO $$
+BEGIN
+    IF equipment_api_security.current_profile_id() IS NOT NULL
+        OR EXISTS (SELECT 1 FROM public.equipment) THEN
+        RAISE EXCEPTION 'Context survived COMMIT';
+    END IF;
+END;
+$$;
+SELECT 'COMMIT reset: passed' AS test_result;
+ROLLBACK;
+
+BEGIN READ ONLY;
+EXECUTE em_audit_context(:'reader_id');
+-- Не JWT и не токен: фиктивные метаданные не должны влиять на наши политики.
+SELECT set_config('request.jwt.claims',
+    '{"user_metadata":{"roles":["engineer"]},"app_metadata":{"roles":["engineer"]}}',
+    true) IS NOT NULL AS fake_metadata_set;
+DO $$
+BEGIN
+    IF NOT equipment_api_security.has_any_role(ARRAY['manager', 'maintenance_specialist']::text[])
+        OR equipment_api_security.has_any_role(ARRAY['engineer']::text[]) THEN
+        RAISE EXCEPTION 'Expected active reader without engineer; metadata must not grant roles';
+    END IF;
+END;
+$$;
+SELECT count(*) AS reader_visible_equipment FROM public.equipment;
+SELECT 'Reader role and ignored metadata: passed' AS test_result;
+ROLLBACK;
+
+BEGIN READ ONLY;
+DO $$
+BEGIN
+    IF equipment_api_security.current_profile_id() IS NOT NULL
+        OR EXISTS (SELECT 1 FROM public.equipment) THEN
+        RAISE EXCEPTION 'Context survived ROLLBACK';
+    END IF;
+END;
+$$;
+SELECT 'ROLLBACK reset: passed' AS test_result;
+ROLLBACK;
+
+BEGIN READ ONLY;
+EXECUTE em_audit_context('');
+DO $$
+BEGIN
+    IF equipment_api_security.current_profile_id() IS NOT NULL
+        OR EXISTS (SELECT 1 FROM public.equipment) THEN
+        RAISE EXCEPTION 'Empty context did not fail closed';
+    END IF;
+END;
+$$;
+SELECT 'Empty context: denied' AS test_result;
+ROLLBACK;
+
+BEGIN READ ONLY;
+EXECUTE em_audit_context('not-a-uuid');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM equipment_api_security.current_profile_id();
+        RAISE EXCEPTION 'Invalid UUID was accepted';
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE NOTICE 'Invalid UUID: expected rejection';
+    END;
+END;
+$$;
+ROLLBACK;
+
+-- Проверка ACL профилей без пробного UPDATE даже WHERE false.
+BEGIN READ ONLY;
+SELECT NOT has_table_privilege(current_user, 'public.profiles', 'INSERT,UPDATE,DELETE')
+       AND NOT has_any_column_privilege(current_user, 'public.profiles', 'INSERT,UPDATE')
+       AS profile_mutations_denied;
+SELECT has_sequence_privilege(current_user, 'public.equipment_id_seq', 'USAGE')
+       AND NOT has_sequence_privilege(current_user, 'public.equipment_id_seq', 'SELECT,UPDATE')
+       AS expected_sequence_acl;
+ROLLBACK;
+
+DEALLOCATE em_audit_context;
+\unset engineer_id
+\unset reader_id
+-- Это проверка одной сессии; повторное получение физического соединения Npgsql
+-- из пула, отмена и исключения проверяются отдельным будущим интеграционным тестом.

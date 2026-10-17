@@ -4,9 +4,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>EquipmentManager-SupabaseAuth</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.13" />
+    <PackageReference Include="Npgsql" Version="9.0.5" />
     <Compile Remove="EquipmentManager.Tests\**\*.cs" />
     <Content Remove="EquipmentManager.Tests\**\*" />
     <None Remove="EquipmentManager.Tests\**\*" />

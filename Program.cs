@@ -1,13 +1,23 @@
 using EquipmentManager.Components;
 using EquipmentManager.Services;
+using EquipmentManager.Services.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddSingleton<EquipmentDataService>();
-builder.Services.AddSingleton<FaultDataService>();
+// Строка подключения не читается из appsettings или аргументов командной строки.
+var profileCredentials = new ConfigurationBuilder();
+if (builder.Environment.IsDevelopment())
+{
+    profileCredentials.AddUserSecrets(typeof(Program).Assembly, optional: true);
+}
+profileCredentials.AddEnvironmentVariables();
+var protectedCredentials = profileCredentials.Build();
+builder.Services.AddEquipmentStorage(builder.Configuration, protectedCredentials);
+builder.Services.AddEquipmentAuthentication(builder.Configuration, protectedCredentials);
+builder.Services.AddEquipmentUiAuthentication(builder.Configuration, protectedCredentials);
 
 var app = builder.Build();
 
@@ -22,10 +32,15 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapEquipmentApi();
+app.MapEquipmentUiAccount();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .RequireAuthorization(UiAuthentication.Policy);
 
 app.Run();

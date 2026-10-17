@@ -8,3 +8,7 @@
 @using Microsoft.JSInterop
 @using EquipmentManager
 @using EquipmentManager.Components
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using EquipmentManager.Services.Authentication
+@attribute [Authorize(Policy = UiAuthentication.Policy)]

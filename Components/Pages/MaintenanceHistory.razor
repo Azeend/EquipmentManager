@@ -1,13 +1,14 @@
 @page "/maintenance-history"
 @using EquipmentManager.Models
 @using EquipmentManager.Services
-@inject FaultDataService FaultDataService
-@inject EquipmentDataService EquipmentDataService
+@inject SessionBackendClient Backend
+@inject NavigationManager Navigation
+@inject StorageSettings Storage
 @inject ILogger<MaintenanceHistory> Logger
 
 <PageTitle>История обслуживания — EquipmentManager</PageTitle>
 <h1>История обслуживания</h1>
-<p class="text-secondary">Записи создаются при завершении заявок. Даты указаны в UTC. Хранение в памяти: при перезапуске приложения история теряется.</p>
+<p class="text-secondary">Записи создаются при завершении заявок. Даты указаны в UTC. @(Storage.Provider == StorageProvider.InMemory ? "При перезапуске приложения учебная история теряется." : "История сохраняется после перезапуска приложения.")</p>
 <div class="row g-3 align-items-end mb-3">
     <div class="col-12 col-md-8">
         <label for="history-equipment" class="form-label">Оборудование</label>
@@ -20,7 +21,7 @@
         </select>
     </div>
     <div class="col-12 col-md-4">
-        <button type="button" class="btn btn-outline-primary" @onclick="LoadHistory">Обновить историю</button>
+        <button type="button" class="btn btn-outline-primary" disabled="@loading" @onclick="LoadHistory">Обновить историю</button>
     </div>
 </div>
 @{
@@ -28,7 +29,8 @@
     IReadOnlyList<MaintenanceRecord> filteredRecords = loadError is null ? FilteredRecords : [];
 }
 
-@if (loadError is not null)
+@if (loading) { <p>Загрузка...</p> }
+else if (loadError is not null)
 {
     <div class="alert alert-danger" role="alert">
         @loadError
@@ -67,6 +69,7 @@ else
     private IReadOnlyList<KeyValuePair<int, string>> equipmentOptions = [];
     private int selectedEquipmentId;
     private string? loadError;
+    private bool loading;
 
     /// <summary>Отбирает записи выбранного оборудования, сохраняя порядок по дате.</summary>
     private IReadOnlyList<MaintenanceRecord> FilteredRecords => selectedEquipmentId == 0
@@ -74,15 +77,16 @@ else
         : records.Where(item => item.EquipmentId == selectedEquipmentId).ToList();
 
     /// <summary>Загружает историю при открытии страницы.</summary>
-    protected override void OnInitialized() => LoadHistory();
+    protected override Task OnInitializedAsync() => LoadHistory();
 
     /// <summary>Обновляет историю и список оборудования, сохраняя выбранный фильтр.</summary>
-    private void LoadHistory()
+    private async Task LoadHistory()
     {
+        loading = true;
         try
         {
-            var loadedRecords = FaultDataService.GetMaintenanceHistory();
-            var currentEquipment = EquipmentDataService.GetEquipment();
+            var loadedRecords = await Backend.GetHistoryAsync();
+            var currentEquipment = await Backend.GetEquipmentAsync();
             var options = currentEquipment.ToDictionary(item => item.Id,
                 item => $"{item.Name} ({item.InventoryNumber})");
             foreach (var record in loadedRecords)
@@ -98,11 +102,16 @@ else
             records = loadedRecords;
             loadError = null;
         }
-        catch (Exception exception)
+        catch (UiSignInException exception)
         {
-            var errorId = Guid.NewGuid().ToString("N");
-            Logger.LogError(exception, "Ошибка загрузки истории обслуживания. Код: {ErrorId}", errorId);
-            loadError = $"Не удалось загрузить историю обслуживания. Повторите попытку. Код ошибки: {errorId}";
+            if (exception.Code == "expired") { Navigation.NavigateTo("/login?error=expired&returnUrl=%2Fmaintenance-history", forceLoad: true); }
+            loadError = exception.Code == "forbidden" ? "Недостаточно прав для чтения истории." : "Сеанс завершён либо Backend API не настроен.";
         }
+        catch (BackendApiException exception)
+        {
+            Logger.LogWarning("Не удалось загрузить историю. HTTP {StatusCode}", exception.StatusCode);
+            loadError = exception.Message;
+        }
+        finally { loading = false; }
     }
 }
