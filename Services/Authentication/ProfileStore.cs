@@ -26,21 +26,26 @@ public sealed class PostgresProfileStore(NpgsqlDataSource? dataSource, ILogger<P
             logger.LogError("Не задано защищённое серверное подключение для чтения профилей.");
             return new ProfileLookup(false, null);
         }
+        var stage = "open_connection";
         try
         {
-            await using var command = dataSource.CreateCommand(
-                "SELECT roles, is_active FROM public.profiles WHERE id = $1");
+            await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+            stage = "prepare_query";
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT roles, is_active FROM public.profiles WHERE id = $1";
             command.Parameters.AddWithValue(userId);
             command.CommandTimeout = 5;
+            stage = "execute_query";
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            stage = "read_profile";
             if (!await reader.ReadAsync(cancellationToken)) { return new ProfileLookup(true, null); }
             var roles = reader.GetFieldValue<string[]>(0);
             return new ProfileLookup(true, new ServerProfile(reader.GetBoolean(1), roles));
         }
         catch (Exception exception) when (exception is NpgsqlException or TimeoutException)
         {
-            // Не журналируем строку подключения, токен, профиль или текст SQL-исключения.
-            logger.LogError("Источник ролей недоступен. Тип ошибки: {ErrorType}", exception.GetType().Name);
+            ProfileStoreDiagnostics.LogFailure(logger, stage, exception);
             return new ProfileLookup(false, null);
         }
     }
