@@ -34,8 +34,10 @@ internal static class ApiAuthFixture
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["SupabaseAuth:Enabled"] = enabled.ToString(), ["SupabaseAuth:SettingsConfirmed"] = "true",
-            ["SupabaseAuth:Issuer"] = Issuer, ["SupabaseAuth:Audience"] = Audience,
+            ["SupabaseAuth:Enabled"] = enabled.ToString(),
+            ["SupabaseAuth:SettingsConfirmed"] = "true",
+            ["SupabaseAuth:Issuer"] = Issuer,
+            ["SupabaseAuth:Audience"] = Audience,
             ["SupabaseAuth:SigningAlgorithm"] = "ES256",
             // Не секрет и не действующее подключение: тестовый IProfileStore заменяется ниже.
             ["ConnectionStrings:Profiles"] = enabled ? "Host=localhost;Username=equipment_profile_reader;SSL Mode=VerifyFull" : null
@@ -94,11 +96,14 @@ internal static class ApiAuthFixture
         public Task<string> GetDocumentAsync(string address, CancellationToken cancellationToken)
         {
             var parameters = SigningKey.ECDsa.ExportParameters(false);
-            return Task.FromResult(JsonSerializer.Serialize(new { keys = new[] { new
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                keys = new[] { new
             {
                 kty = "EC", crv = "P-256", alg = "ES256", use = "sig", kid = SigningKey.KeyId,
                 x = Base64UrlEncoder.Encode(parameters.Q.X!), y = Base64UrlEncoder.Encode(parameters.Q.Y!)
-            } } }));
+            } }
+            }));
         }
     }
 

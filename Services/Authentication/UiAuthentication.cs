@@ -37,7 +37,10 @@ public static class UiAuthentication
         }
         services.AddSingleton(new UiAuthSettings
         {
-            Enabled = auth.Enabled, Issuer = auth.Issuer, PublishableKey = key, BackendBaseUrl = backendUri
+            Enabled = auth.Enabled,
+            Issuer = auth.Issuer,
+            PublishableKey = key,
+            BackendBaseUrl = backendUri
         });
         services.AddSingleton(TimeProvider.System);
         services.AddMemoryCache();

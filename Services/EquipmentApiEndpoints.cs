@@ -90,7 +90,8 @@ public static class EquipmentApiEndpoints
     private static IResult Error(HttpContext context, int status, string code, IReadOnlyList<string> errors) =>
         Results.Problem(statusCode: status, title: "Операция не выполнена.", extensions: new Dictionary<string, object?>
         {
-            ["code"] = code, ["traceId"] = context.TraceIdentifier,
+            ["code"] = code,
+            ["traceId"] = context.TraceIdentifier,
             ["errors"] = new Dictionary<string, IReadOnlyList<string>> { ["operation"] = errors }
         });
 

@@ -135,6 +135,9 @@ public sealed class EquipmentApiTests
     /// <summary>Возвращает корректный запрос с уникальным тестовым номером.</summary>
     private static EquipmentRequest CreateRequest() => new()
     {
-        Name = "Насос API", InventoryNumber = "API-TEST-001", Location = "Цех API", Status = "Исправно"
+        Name = "Насос API",
+        InventoryNumber = "API-TEST-001",
+        Location = "Цех API",
+        Status = "Исправно"
     };
 }

@@ -23,7 +23,10 @@ public sealed class ApplicationIntegrationTests
         using var client = ApiAuthFixture.CreateClient(app);
         var created = await client.PostAsJsonAsync("/api/equipment", new EquipmentRequest
         {
-            Name = "API насос", InventoryNumber = "API-ROUNDTRIP", Location = "Цех", Status = "Исправно"
+            Name = "API насос",
+            InventoryNumber = "API-ROUNDTRIP",
+            Location = "Цех",
+            Status = "Исправно"
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var equipment = (await created.Content.ReadFromJsonAsync<Equipment>())!;
@@ -111,7 +114,10 @@ public sealed class ApplicationIntegrationTests
         var marker = "UI-API-" + Guid.NewGuid().ToString("N");
         var equipment = await backend.SaveEquipmentAsync(new Equipment
         {
-            Name = marker, InventoryNumber = marker, Location = "Цех", Status = "Исправно"
+            Name = marker,
+            InventoryNumber = marker,
+            Location = "Цех",
+            Status = "Исправно"
         });
         await backend.RegisterFaultAsync(new FaultRegistration { EquipmentId = equipment.Id, Description = marker });
         var fault = Assert.Single(await backend.GetFaultsAsync(), item => item.Description == marker);

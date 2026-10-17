@@ -15,7 +15,10 @@ public sealed class EquipmentRequest
     /// <summary>Преобразует отсутствующие значения в пустые для общего валидатора.</summary>
     public Equipment ToEquipment(int id = 0) => new()
     {
-        Id = id, Name = Name ?? string.Empty, InventoryNumber = InventoryNumber ?? string.Empty,
-        Location = Location ?? string.Empty, Status = Status ?? string.Empty
+        Id = id,
+        Name = Name ?? string.Empty,
+        InventoryNumber = InventoryNumber ?? string.Empty,
+        Location = Location ?? string.Empty,
+        Status = Status ?? string.Empty
     };
 }

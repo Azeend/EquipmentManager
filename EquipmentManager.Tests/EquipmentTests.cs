@@ -85,6 +85,9 @@ public sealed class EquipmentTests
     /// <summary>Создаёт независимые корректные данные для каждого теста.</summary>
     private static Equipment CreateEquipment() => new()
     {
-        Name = "Насос", InventoryNumber = "TEST-001", Location = "Цех 1", Status = "Исправно"
+        Name = "Насос",
+        InventoryNumber = "TEST-001",
+        Location = "Цех 1",
+        Status = "Исправно"
     };
 }

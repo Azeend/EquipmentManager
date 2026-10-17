@@ -68,10 +68,14 @@ public static class SupabaseAuthentication
                 new HttpDocumentRetriever { RequireHttps = true });
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuerSigningKey = true, RequireSignedTokens = true,
-                ValidateIssuer = true, ValidIssuer = settings.Issuer,
-                ValidateAudience = true, ValidAudience = settings.Audience,
-                ValidateLifetime = true, RequireExpirationTime = true,
+                ValidateIssuerSigningKey = true,
+                RequireSignedTokens = true,
+                ValidateIssuer = true,
+                ValidIssuer = settings.Issuer,
+                ValidateAudience = true,
+                ValidAudience = settings.Audience,
+                ValidateLifetime = true,
+                RequireExpirationTime = true,
                 ClockSkew = TimeSpan.FromSeconds(30),
                 ValidAlgorithms = [settings.SigningAlgorithm]
             };

@@ -55,7 +55,9 @@ public static class UiAccountEndpoints
             {
                 await context.SignInAsync(UiAuthentication.Scheme, principal, new AuthenticationProperties
                 {
-                    IsPersistent = false, AllowRefresh = false, ExpiresUtc = sessions.Find(principal)!.ExpiresAt
+                    IsPersistent = false,
+                    AllowRefresh = false,
+                    ExpiresUtc = sessions.Find(principal)!.ExpiresAt
                 });
             }
             catch

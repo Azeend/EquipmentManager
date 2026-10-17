@@ -210,8 +210,14 @@ public sealed class EquipmentAuthorizationTests
     public void InvalidConfiguration_ThrowsBeforeActivation(bool confirmed, string algorithm)
     {
         // Arrange
-        var settings = new SupabaseAuthSettings { Enabled = true, SettingsConfirmed = confirmed,
-            Issuer = ApiAuthFixture.Issuer, Audience = ApiAuthFixture.Audience, SigningAlgorithm = algorithm };
+        var settings = new SupabaseAuthSettings
+        {
+            Enabled = true,
+            SettingsConfirmed = confirmed,
+            Issuer = ApiAuthFixture.Issuer,
+            Audience = ApiAuthFixture.Audience,
+            SigningAlgorithm = algorithm
+        };
         // Act
         var exception = Record.Exception(settings.Validate);
         // Assert

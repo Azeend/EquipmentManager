@@ -30,9 +30,12 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["SupabaseAuth:Enabled"] = "true", ["SupabaseAuth:SettingsConfirmed"] = "true",
-            ["SupabaseAuth:Issuer"] = ApiAuthFixture.Issuer, ["SupabaseAuth:Audience"] = ApiAuthFixture.Audience,
-            ["SupabaseAuth:SigningAlgorithm"] = "ES256", ["SupabaseUiAuth:BackendBaseUrl"] = "https://backend.invalid/"
+            ["SupabaseAuth:Enabled"] = "true",
+            ["SupabaseAuth:SettingsConfirmed"] = "true",
+            ["SupabaseAuth:Issuer"] = ApiAuthFixture.Issuer,
+            ["SupabaseAuth:Audience"] = ApiAuthFixture.Audience,
+            ["SupabaseAuth:SigningAlgorithm"] = "ES256",
+            ["SupabaseUiAuth:BackendBaseUrl"] = "https://backend.invalid/"
         });
         var credentials = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -65,7 +68,7 @@ internal sealed class UiAuthFixture : IAsyncDisposable
     {
         await App.StartAsync();
         Client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-            { BaseAddress = new Uri(App.Urls.Single()) };
+        { BaseAddress = new Uri(App.Urls.Single()) };
     }
 
     internal async Task<(string Cookie, string Token, string Html)> FormAsync(string path = "/login", string? cookie = null)
@@ -88,8 +91,10 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         if (!string.IsNullOrEmpty(cookie)) { request.Headers.Add("Cookie", cookie); }
         request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["email"] = "fixture@example.invalid", ["password"] = Auth.Password,
-            ["returnUrl"] = returnUrl, ["__RequestVerificationToken"] = token
+            ["email"] = "fixture@example.invalid",
+            ["password"] = Auth.Password,
+            ["returnUrl"] = returnUrl,
+            ["__RequestVerificationToken"] = token
         });
         return await Client.SendAsync(request);
     }

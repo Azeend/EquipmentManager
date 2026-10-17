@@ -99,11 +99,17 @@ public sealed class PostgresFaultStore(IStoreExecutor executor)
 
     private static Fault Map(DbDataReader reader) => new()
     {
-        Id = reader.GetInt32(0), EquipmentId = reader.GetInt32(1), EquipmentLabel = reader.GetString(2),
-        Description = reader.GetString(3), Status = reader.GetString(4), Author = reader.GetString(5),
+        Id = reader.GetInt32(0),
+        EquipmentId = reader.GetInt32(1),
+        EquipmentLabel = reader.GetString(2),
+        Description = reader.GetString(3),
+        Status = reader.GetString(4),
+        Author = reader.GetString(5),
         CreatedAt = reader.GetFieldValue<DateTimeOffset>(6),
         StartedAt = reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
         CompletedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
-        WorkDescription = reader.GetString(9), Result = reader.GetString(10), Version = reader.GetInt32(11)
+        WorkDescription = reader.GetString(9),
+        Result = reader.GetString(10),
+        Version = reader.GetInt32(11)
     };
 }

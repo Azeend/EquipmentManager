@@ -51,6 +51,21 @@ dotnet run --project EquipmentManager.csproj --launch-profile https
 
 Облачный тест сохранён и исключён из обычного запуска. Результаты и границы проверки — [backend_testing.md](backend_testing.md).
 
+## Непрерывная интеграция — ДЗ6
+
+Workflow [CI](.github/workflows/ci.yml) запускается при `push` в `master` и для `pull_request`, направленных в `master`. На `ubuntu-latest` устанавливается .NET SDK `9.0.x`, затем последовательно выполняются восстановление зависимостей, сборка Release, обычные xUnit-тесты и проверка форматирования. Ошибка любого этапа останавливает следующие этапы.
+
+```powershell
+dotnet restore EquipmentManager.sln
+dotnet build EquipmentManager.sln --configuration Release --no-restore
+dotnet test EquipmentManager.sln --configuration Release --no-build --no-restore --filter "Category!=PostgresIntegration"
+dotnet format EquipmentManager.sln --verify-no-changes --no-restore
+```
+
+Секреты Supabase для CI не требуются: обычные тесты используют локальные фикстуры и подмены внешних зависимостей. Облачный тест исключён фильтром `Category!=PostgresIntegration`; дополнительно `EM_PG_TEST_RUN` в workflow оставлен пустым, поэтому разрешение подключения не выдаётся. Проверка форматирования не изменяет файлы; для локального исправления пробелов используйте `dotnet format whitespace EquipmentManager.sln --no-restore` и проверьте diff.
+
+Для первого запуска самостоятельно отправьте изменения в `master` либо откройте pull request в `master`, затем откройте **Actions → CI** в GitHub. Если Actions отключены, разрешите запуск в настройках репозитория. Этот workflow выполняет только CI; Docker, Render и автоматическое развёртывание пока не настроены.
+
 ## Документация
 
 | Материал | Назначение |

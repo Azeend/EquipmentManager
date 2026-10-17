@@ -20,10 +20,12 @@ public sealed class FaultDataService
         {
             faults.Add(new Fault
             {
-                Id = nextId++, EquipmentId = equipment.Id,
+                Id = nextId++,
+                EquipmentId = equipment.Id,
                 EquipmentLabel = $"{equipment.Name} ({equipment.InventoryNumber})",
                 Description = "Тестовая заявка: повышенная вибрация, требуется диагностика.",
-                Author = "Тестовые данные", CreatedAt = DateTimeOffset.UtcNow
+                Author = "Тестовые данные",
+                CreatedAt = DateTimeOffset.UtcNow
             });
         }
     }
@@ -64,9 +66,11 @@ public sealed class FaultDataService
             if (equipment is null) { return new(FaultWriteStatus.NotFound, null, ["Выбранное оборудование недоступно. Обновите список оборудования."]); }
             var fault = new Fault
             {
-                Id = nextId++, EquipmentId = equipment.Id,
+                Id = nextId++,
+                EquipmentId = equipment.Id,
                 EquipmentLabel = $"{equipment.Name} ({equipment.InventoryNumber})",
-                Description = registration.Description.Trim(), CreatedAt = DateTimeOffset.UtcNow,
+                Description = registration.Description.Trim(),
+                CreatedAt = DateTimeOffset.UtcNow,
                 Author = author ?? "Не установлен (без авторизации)"
             };
             faults.Add(fault);
@@ -114,8 +118,11 @@ public sealed class FaultDataService
                 if (errors.Count > 0) { return new(FaultWriteStatus.Invalid, null, errors); }
                 var completedFault = fault with
                 {
-                    Status = targetStatus, Version = fault.Version + 1, CompletedAt = DateTimeOffset.UtcNow,
-                    WorkDescription = completion.WorkDescription.Trim(), Result = completion.Result.Trim()
+                    Status = targetStatus,
+                    Version = fault.Version + 1,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    WorkDescription = completion.WorkDescription.Trim(),
+                    Result = completion.Result.Trim()
                 };
                 var record = new MaintenanceRecord
                 {

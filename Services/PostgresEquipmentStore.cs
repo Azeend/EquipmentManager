@@ -31,9 +31,11 @@ public sealed class PostgresEquipmentStore(IStoreExecutor executor)
         PostgresStoreExecutor.GetVerifiedUserId(user);
         var candidate = new Equipment
         {
-            Id = equipment.Id, Name = equipment.Name?.Trim() ?? string.Empty,
+            Id = equipment.Id,
+            Name = equipment.Name?.Trim() ?? string.Empty,
             InventoryNumber = equipment.InventoryNumber?.Trim() ?? string.Empty,
-            Location = equipment.Location?.Trim() ?? string.Empty, Status = equipment.Status
+            Location = equipment.Location?.Trim() ?? string.Empty,
+            Status = equipment.Status
         };
         var errors = new EquipmentValidator().Validate(candidate);
         if (candidate.Id < 0) { errors.Add("Некорректный идентификатор оборудования."); }
@@ -84,7 +86,10 @@ public sealed class PostgresEquipmentStore(IStoreExecutor executor)
 
     private static Equipment Map(DbDataReader reader) => new()
     {
-        Id = reader.GetInt32(0), Name = reader.GetString(1), InventoryNumber = reader.GetString(2),
-        Location = reader.GetString(3), Status = reader.GetString(4)
+        Id = reader.GetInt32(0),
+        Name = reader.GetString(1),
+        InventoryNumber = reader.GetString(2),
+        Location = reader.GetString(3),
+        Status = reader.GetString(4)
     };
 }

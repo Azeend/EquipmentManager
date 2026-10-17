@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EM_PG_TEST_RUN: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore EquipmentManager.sln
+
+      - name: Build Release
+        run: dotnet build EquipmentManager.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test EquipmentManager.sln --configuration Release --no-build --no-restore --filter "Category!=PostgresIntegration"
+
+      - name: Verify formatting
+        run: dotnet format EquipmentManager.sln --verify-no-changes --no-restore

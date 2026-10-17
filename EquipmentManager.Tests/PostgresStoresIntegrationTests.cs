@@ -51,7 +51,11 @@ public sealed class PostgresStoresIntegrationTests(ITestOutputHelper output)
             Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
             await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(new
             {
-                Marker = marker, settings.ProjectRef, settings.Engineer, settings.Specialist, settings.Manager
+                Marker = marker,
+                settings.ProjectRef,
+                settings.Engineer,
+                settings.Specialist,
+                settings.Manager
             }), cancellationToken);
             output.WriteLine("Метка только этого запуска: " + marker);
             output.WriteLine("Журнал восстановления без секретов: " + manifestPath);
@@ -65,14 +69,19 @@ public sealed class PostgresStoresIntegrationTests(ITestOutputHelper output)
                 var faults = new PostgresFaultStore(executor);
                 var saved = await equipment.SaveAsync(Principal(settings.Engineer), new Equipment
                 {
-                    Name = marker, InventoryNumber = marker, Location = "EquipmentManager-Test E2E", Status = "Исправно"
+                    Name = marker,
+                    InventoryNumber = marker,
+                    Location = "EquipmentManager-Test E2E",
+                    Status = "Исправно"
                 }, cancellationToken);
                 Assert.Equal(EquipmentSaveStatus.Saved, saved.Status);
                 equipmentId = Assert.IsType<Equipment>(saved.Equipment).Id;
                 var duplicate = await equipment.SaveAsync(Principal(settings.Engineer), new Equipment
                 {
-                    Name = marker, InventoryNumber = " " + marker.ToLowerInvariant() + " ",
-                    Location = "EquipmentManager-Test E2E", Status = "Исправно"
+                    Name = marker,
+                    InventoryNumber = " " + marker.ToLowerInvariant() + " ",
+                    Location = "EquipmentManager-Test E2E",
+                    Status = "Исправно"
                 }, cancellationToken);
                 Assert.Equal(EquipmentSaveStatus.Conflict, duplicate.Status);
                 var registered = await faults.RegisterAsync(Principal(settings.Engineer),
