@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace EquipmentManager.Services.Authentication;
 
@@ -91,11 +92,19 @@ public static class UiAccountEndpoints
     private static async Task<bool> ValidateFormAsync(HttpContext context, IAntiforgery antiforgery)
     {
         if (!context.Request.HasFormContentType || context.Request.ContentLength > 16384) { return false; }
+        // Ограничиваем поток до разбора antiforgery: Content-Length может отсутствовать при chunked/HTTP/2.
+        var bodySize = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (bodySize is { IsReadOnly: false })
+        {
+            bodySize.MaxRequestBodySize = Math.Min(bodySize.MaxRequestBodySize ?? long.MaxValue, 16384);
+        }
         try
         {
             await antiforgery.ValidateRequestAsync(context);
             return true;
         }
         catch (AntiforgeryValidationException) { return false; }
+        catch (BadHttpRequestException exception) when (exception.StatusCode == StatusCodes.Status413PayloadTooLarge) { return false; }
+        catch (InvalidDataException) { return false; }
     }
 }

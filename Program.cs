@@ -23,6 +23,7 @@ builder.Services.AddEquipmentUiAuthentication(builder.Configuration, protectedCr
 var app = builder.Build();
 // Схема запроса восстанавливается до HSTS, HTTPS redirect, cookie и antiforgery.
 app.UseForwardedHeaders();
+app.UseEquipmentSecurityHeaders();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

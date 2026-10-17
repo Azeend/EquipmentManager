@@ -58,6 +58,7 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         App = builder.Build();
         // Только в тестовом хосте: имитируем HTTPS termination, чтобы тестировать Secure cookie без сертификата.
         App.Use((context, next) => { context.Request.Scheme = "https"; return next(context); });
+        App.UseEquipmentSecurityHeaders();
         App.UseAuthentication();
         App.UseAuthorization();
         App.UseAntiforgery();
