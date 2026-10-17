@@ -30,3 +30,12 @@ ui_concepts
 **/*.pubxml
 **/*.publishsettings
 **/appsettings.*.json
+# В контекст допускается только выбранный публичный CA, остальные сертификаты исключены.
+**/*.crt
+**/*.cer
+**/*.cert
+**/*.der
+**/*.p7b
+**/*.p7c
+certificates/**
+!certificates/supabase-ca.crt
