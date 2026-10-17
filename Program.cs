@@ -1,9 +1,11 @@
 using EquipmentManager.Components;
 using EquipmentManager.Services;
 using EquipmentManager.Services.Authentication;
+using EquipmentManager.Services.Analytics;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRenderProxy(builder.Configuration);
+builder.Services.AddEquipmentAnalytics(builder.Configuration);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

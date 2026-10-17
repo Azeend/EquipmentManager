@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using EquipmentManager.Components;
 using EquipmentManager.Services;
 using EquipmentManager.Services.Authentication;
+using EquipmentManager.Services.Analytics;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -45,6 +46,7 @@ internal sealed class UiAuthFixture : IAsyncDisposable
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
         builder.Services.AddEquipmentAuthentication(builder.Configuration, credentials);
         builder.Services.AddEquipmentUiAuthentication(builder.Configuration, credentials);
+        builder.Services.AddEquipmentAnalytics(builder.Configuration);
         builder.Services.AddSingleton<TimeProvider>(Clock);
         builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(

@@ -1,0 +1,54 @@
+@using EquipmentManager.Services.Analytics
+@implements IAsyncDisposable
+@inject YandexMetrikaSettings Settings
+@inject IHostEnvironment Environment
+@inject IJSRuntime JavaScript
+@inject ILogger<MetrikaTracker> Logger
+
+@code {
+    /// <summary>Текущий адрес используется только сервером для выбора безопасного пути.</summary>
+    [Parameter] public string Location { get; set; } = string.Empty;
+
+    private IJSObjectReference? module;
+    private bool disposed;
+
+    /// <summary>SSR не отправляет просмотры: JS вызывается только после интерактивной отрисовки маршрута.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed || !Environment.IsProduction() || !Settings.IsConfigured) { return; }
+        var location = Location;
+        var path = Settings.GetPagePath(location);
+        try
+        {
+            if (path is null)
+            {
+                if (module is not null) { await module.InvokeVoidAsync("pause"); }
+                return;
+            }
+            module ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "./js/metrika.js");
+            if (disposed || Location != location) { return; }
+            await module.InvokeVoidAsync("track", Settings.CounterId, new Uri(Settings.PublicOrigin).GetLeftPart(UriPartial.Authority), path);
+        }
+        catch (Exception exception) when (exception is JSException or OperationCanceledException)
+        {
+            // Не передаём исключение: его сообщение может содержать текущий URL или данные JS.
+            Logger.LogWarning("Аналитика недоступна; тип: {ErrorType}", exception.GetType().Name);
+        }
+    }
+
+    /// <summary>Прекращает работу счётчика при удалении компонента или завершении circuit.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (module is null) { return; }
+        try
+        {
+            await module.InvokeVoidAsync("pause");
+            await module.DisposeAsync();
+        }
+        catch (Exception exception) when (exception is JSException or OperationCanceledException)
+        {
+            Logger.LogDebug("Завершение аналитики без JS-соединения; тип: {ErrorType}", exception.GetType().Name);
+        }
+    }
+}

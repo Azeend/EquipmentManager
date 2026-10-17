@@ -8,5 +8,12 @@
             </NotAuthorized>
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        <AuthorizeView>
+            <Authorized>
+                <MetrikaTracker Location="@Navigation.Uri" />
+            </Authorized>
+        </AuthorizeView>
     </Found>
 </Router>
+
+@inject NavigationManager Navigation
