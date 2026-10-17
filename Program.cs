@@ -3,6 +3,7 @@ using EquipmentManager.Services;
 using EquipmentManager.Services.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddRenderProxy(builder.Configuration);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -20,6 +21,8 @@ builder.Services.AddEquipmentAuthentication(builder.Configuration, protectedCred
 builder.Services.AddEquipmentUiAuthentication(builder.Configuration, protectedCredentials);
 
 var app = builder.Build();
+// Схема запроса восстанавливается до HSTS, HTTPS redirect, cookie и antiforgery.
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
