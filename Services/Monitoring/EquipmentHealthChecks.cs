@@ -63,8 +63,8 @@ public sealed class HealthStateTransitions(ILogger<HealthStateTransitions> logge
             states[check] = status;
             logger.Log(status == HealthStatus.Healthy ? LogLevel.Information : LogLevel.Warning,
                 new EventId(6001, "HealthStateChanged"),
-                "Состояние проверки изменилось. Проверка: {Check}; раньше: {PreviousStatus}; сейчас: {Status}; категория: {Category}; тип: {ErrorType}",
-                check, previous, status.ToString(), category, errorType);
+                "Событие: {Event}; состояние проверки изменилось. Проверка: {Check}; раньше: {PreviousStatus}; сейчас: {Status}; категория: {Category}; тип: {ErrorType}",
+                "HealthStateChanged", check, previous, status.ToString(), category, errorType);
         }
     }
 }

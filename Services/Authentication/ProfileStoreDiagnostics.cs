@@ -23,7 +23,8 @@ public static class ProfileStoreDiagnostics
                     ? "timeout"
                     : causes.Any(cause => cause is PostgresException) ? "database" : "other_connection";
         // Исключение намеренно не передаётся ILogger: Message/ToString могут содержать секреты и данные профиля.
-        logger.LogError("Источник ролей недоступен. Этап: {Stage}; категория: {Category}; тип: {ErrorType}; внутренний тип: {InnerErrorType}; корневой тип: {RootErrorType}",
-            stage, category, exception.GetType().Name, exception.InnerException?.GetType().Name ?? "none", causes[^1].GetType().Name);
+        logger.LogError(new EventId(3001, "ProfileStoreUnavailable"),
+            "Событие: {Event}; источник ролей недоступен. Этап: {Stage}; категория: {Category}; тип: {ErrorType}; внутренний тип: {InnerErrorType}; корневой тип: {RootErrorType}",
+            "ProfileStoreUnavailable", stage, category, exception.GetType().Name, exception.InnerException?.GetType().Name ?? "none", causes[^1].GetType().Name);
     }
 }

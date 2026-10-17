@@ -85,14 +85,18 @@ public sealed class PostgresStoreExecutor : IStoreExecutor, IAsyncDisposable
         }
         catch (PostgresException exception)
         {
-            logger.LogWarning("PostgreSQL отклонил операцию хранилища. Этап: {Stage}; SQLSTATE: {SqlState}", stage, exception.SqlState);
+            logger.LogWarning(new EventId(3002, "PostgresOperationRejected"),
+                "Событие: {Event}; PostgreSQL отклонил операцию хранилища. Этап: {Stage}; SQLSTATE: {SqlState}",
+                "PostgresOperationRejected", stage, exception.SqlState);
             throw new StoreException(exception.SqlState == PostgresErrorCodes.InsufficientPrivilege
                 ? StoreFailure.Forbidden : StoreFailure.Database, exception.SqlState, exception.ConstraintName);
         }
         catch (Exception exception) when (exception is NpgsqlException or TimeoutException
             || exception is OperationCanceledException && commitStarted)
         {
-            logger.LogWarning("Сбой хранилища. Этап: {Stage}; тип: {ErrorType}; COMMIT начат: {CommitStarted}", stage, exception.GetType().Name, commitStarted);
+            logger.LogWarning(new EventId(3003, "PostgresConnectionFailed"),
+                "Событие: {Event}; сбой хранилища. Этап: {Stage}; тип: {ErrorType}; COMMIT начат: {CommitStarted}",
+                "PostgresConnectionFailed", stage, exception.GetType().Name, commitStarted);
             throw new StoreException(commitStarted ? StoreFailure.OutcomeUnknown : StoreFailure.Unavailable);
         }
     }

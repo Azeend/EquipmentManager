@@ -36,7 +36,8 @@ public static class UiAccountEndpoints
         if (email.Length is 0 or > 320 || password.Length is 0 or > 4096)
         {
             loggerFactory.CreateLogger("EquipmentManager.Services.Authentication.UiAccountEndpoints")
-                .LogWarning("Отказ входа до Supabase Auth. Категория: invalid_form; HTTP-ответ Auth отсутствует.");
+                .LogWarning(new EventId(2003, "InvalidSignInForm"),
+                    "Событие: {Event}; отказ входа до Supabase Auth. Категория: invalid_form; HTTP-ответ Auth отсутствует.", "InvalidSignInForm");
             return Error("credentials");
         }
         try
@@ -57,6 +58,10 @@ public static class UiAccountEndpoints
         if (lookup.Profile is not { IsActive: true } profile
             || !profile.Roles.Any(role => role is "engineer" or "maintenance_specialist" or "manager"))
         {
+            context.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("EquipmentManager.Services.Authentication.UiAccountEndpoints")
+                .LogWarning(new EventId(2004, "UiProfileAccessDenied"),
+                    "Событие: {Event}; причина: {Reason}", "UiProfileAccessDenied", "forbidden");
             return Error("forbidden");
         }
         // При повторном входе в том же браузере предыдущий локальный сеанс отзывается.

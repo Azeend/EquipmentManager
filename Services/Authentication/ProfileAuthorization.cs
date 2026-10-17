@@ -36,7 +36,7 @@ public sealed class ProfileAuthorizationHandler(IServiceProvider services)
 }
 
 /// <summary>Не выдаёт недоступность БД за недостаточные права и не разрешает операцию при сбое.</summary>
-public sealed class ProfileAuthorizationResultHandler : IAuthorizationMiddlewareResultHandler
+public sealed class ProfileAuthorizationResultHandler(ILogger<ProfileAuthorizationResultHandler> logger) : IAuthorizationMiddlewareResultHandler
 {
     private readonly AuthorizationMiddlewareResultHandler defaultHandler = new();
 
@@ -49,6 +49,12 @@ public sealed class ProfileAuthorizationResultHandler : IAuthorizationMiddleware
                 extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier })
                 .ExecuteAsync(context);
             return;
+        }
+        if (!result.Succeeded)
+        {
+            logger.LogWarning(new EventId(2002, "AuthorizationDenied"),
+                "Событие: {Event}; результат: {Outcome}; TraceId: {TraceId}",
+                "AuthorizationDenied", result.Challenged ? "challenge" : "forbidden", context.TraceIdentifier);
         }
         await defaultHandler.HandleAsync(next, context, policy, result);
     }

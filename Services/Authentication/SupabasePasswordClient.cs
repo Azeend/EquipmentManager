@@ -133,8 +133,9 @@ public sealed class SupabasePasswordClient(IHttpClientFactory clients, UiAuthSet
     /// <summary>Журналирует только фиксированные категории, HTTP-статус и тип исключения; ответ Auth и JWT не передаются.</summary>
     private UiSignInException Reject(string code, string stage, string category, int? authStatus, Exception? exception = null)
     {
-        logger.LogWarning("Отказ входа Supabase Auth. Этап: {Stage}; HTTP-статус Auth: {AuthStatus}; категория: {Category}; тип исключения: {ErrorType}",
-            stage, authStatus, category, exception?.GetType().Name ?? "none");
+        logger.LogWarning(new EventId(2001, "SupabaseSignInRejected"),
+            "Событие: {Event}; отказ входа Supabase Auth. Этап: {Stage}; HTTP-статус Auth: {AuthStatus}; категория: {Category}; тип исключения: {ErrorType}",
+            "SupabaseSignInRejected", stage, authStatus, category, exception?.GetType().Name ?? "none");
         return new UiSignInException(code);
     }
 
