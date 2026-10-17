@@ -1,6 +1,8 @@
 # EquipmentManager
 
-Учебное приложение для учёта промышленного оборудования, регистрации неисправностей и обслуживания. Лабораторная №5: интерфейс Blazor подключён к защищённому Backend API, данные сохраняются в Supabase PostgreSQL.
+Учебное приложение для учёта промышленного оборудования, регистрации неисправностей и обслуживания. Интерфейс Blazor подключён к защищённому Backend API, данные сохраняются в Supabase PostgreSQL. Лабораторная №6 добавляет CI/CD, аудит безопасности, OAuth2, аналитику и мониторинг.
+
+[Открыть приложение](https://equipment-manager-demo.onrender.com/) · [Репозиторий GitHub](https://github.com/Azeend/EquipmentManager) · [Общая документация интеграций](integration_documentation.md)
 
 ## Технологии
 
@@ -17,7 +19,7 @@
 - `/login`, `/account/session`: вход, состояние сеанса и выход.
 - Инженер управляет оборудованием и регистрирует заявки; специалист регистрирует и обрабатывает заявки; руководитель читает данные. Связанное оборудование удалить нельзя.
 
-По сообщению пользователя, основной сценарий, авторизация, роли, валидация и дубликаты вручную проверены с основной EquipmentManager. Последняя полная сборка: **0 предупреждений и ошибок; 140 обычных тестов пройдены**. Облачный PostgreSQL-интеграционный тест отдельно не запускался.
+Вход доступен по email/password и через привязанный Яндекс ID. По подтверждению владельца, опубликованные интеграции работают: Метрика получает просмотры, оба Health Checks возвращают Healthy, UptimeRobot показывает Up, JSON-логи доступны в Render. Локальный набор включает **280 обычных .NET-тестов и 10 JS-тестов**; облачный PostgreSQL-тест запускается отдельно, только явно разрешённым способом.
 
 ## Запуск в Visual Studio
 
@@ -46,6 +48,8 @@
 dotnet restore EquipmentManager.sln
 dotnet build EquipmentManager.sln --no-restore
 dotnet test EquipmentManager.sln --no-build --no-restore --filter "Category!=PostgresIntegration"
+node --test EquipmentManager.Tests/metrika.test.mjs
+dotnet format EquipmentManager.sln --verify-no-changes --no-restore
 dotnet run --project EquipmentManager.csproj --launch-profile https
 ```
 
@@ -64,11 +68,11 @@ dotnet format EquipmentManager.sln --verify-no-changes --no-restore
 
 Секреты Supabase для CI не требуются: обычные тесты используют локальные фикстуры и подмены внешних зависимостей. Облачный тест исключён фильтром `Category!=PostgresIntegration`; дополнительно `EM_PG_TEST_RUN` в workflow оставлен пустым, поэтому разрешение подключения не выдаётся. Проверка форматирования не изменяет файлы; для локального исправления пробелов используйте `dotnet format whitespace EquipmentManager.sln --no-restore` и проверьте diff.
 
-Для первого запуска самостоятельно отправьте изменения в `master` либо откройте pull request в `master`, затем откройте **Actions → CI** в GitHub. Если Actions отключены, разрешите запуск в настройках репозитория. Этот workflow выполняет только CI; Docker, Render и автоматическое развёртывание пока не настроены.
+Результаты доступны в **Actions → CI**. Workflow выполняет только CI; автоматический деплой Docker из `master` настроен на стороне Render в режиме **After CI Checks Pass**. JS-тесты запускаются отдельно через Node.js (без npm-пакетов), текущий workflow их не включает.
 
 ## Подготовка к Render — ДЗ6
 
-Добавлены многоэтапный Dockerfile с непривилегированным пользователем, `.dockerignore` и [.env.example](.env.example) без настоящих секретов. Порядок создания Web Service, настройки HTTPS/SignalR, Session Pooler и автоматического деплоя **After CI Checks Pass** описан в [инструкции Render](render_deployment.md). Развёртывание и настройки облачных сервисов этим изменением не выполняются.
+Приложение опубликовано как Render Free Web Service (Docker, `master`, Frankfurt). Многоэтапный Dockerfile запускает приложение от непривилегированного пользователя; публичный CA Supabase проверяется и устанавливается при сборке. Порядок настройки HTTPS/SignalR, Session Pooler и автоматического деплоя **After CI Checks Pass** описан в [инструкции Render](render_deployment.md). [.env.example](.env.example) содержит только шаблон; приложение не загружает этот файл автоматически.
 
 Обработка forwarded headers по умолчанию выключена. Обычный режим требует подтверждённых IP прокси; отдельный явно выбранный `Hosting__RenderFreeProxy=true` предназначен для временного Render Free и доверяет ingress платформы без проверки IP. Ограничения этого учебного компромисса и настройки приведены в инструкции.
 
@@ -76,6 +80,13 @@ dotnet format EquipmentManager.sln --verify-no-changes --no-restore
 
 | Материал | Назначение |
 | --- | --- |
+| [integration_documentation.md](integration_documentation.md) | Итоги ДЗ6: архитектура, интеграции, настройки и проверка |
+| [security_audit.md](security_audit.md) | Аудит безопасности, исправления и остаточные риски на дату аудита |
+| [oauth_yandex.md](oauth_yandex.md) | Яндекс OAuth2 через Supabase, PKCE, привязка существующего пользователя |
+| [metrika_integration.md](metrika_integration.md) | Счётчик 113657931, безопасные просмотры Blazor и ограничения |
+| [health_monitoring.md](health_monitoring.md) | Liveness/readiness, PostgreSQL SELECT 1, HTTP 200/503 |
+| [structured_logging.md](structured_logging.md) | JSON Console, события, фильтрация Production и Render Logs |
+| [render_deployment.md](render_deployment.md) | Docker, переменные Render, сертификат и ограничения прокси |
 | [backend_documentation.md](backend_documentation.md) | Актуальная архитектура, настройка, порядок SQL, API и примеры HTTP |
 | [backend_testing.md](backend_testing.md) | Шаг 8: 140 тестов, результаты сборки, незапущенный облачный тест |
 | [error_handling_logging.md](error_handling_logging.md) | Шаг 7: ошибки и диагностика в ASP.NET/Postgres Logs |
