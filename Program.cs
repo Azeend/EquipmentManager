@@ -2,6 +2,7 @@ using EquipmentManager.Components;
 using EquipmentManager.Services;
 using EquipmentManager.Services.Authentication;
 using EquipmentManager.Services.Analytics;
+using EquipmentManager.Services.Monitoring;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRenderProxy(builder.Configuration);
@@ -21,6 +22,7 @@ var protectedCredentials = profileCredentials.Build();
 builder.Services.AddEquipmentStorage(builder.Configuration, protectedCredentials);
 builder.Services.AddEquipmentAuthentication(builder.Configuration, protectedCredentials);
 builder.Services.AddEquipmentUiAuthentication(builder.Configuration, protectedCredentials);
+builder.Services.AddEquipmentHealthChecks(builder.Configuration, protectedCredentials);
 
 var app = builder.Build();
 // Схема запроса восстанавливается до HSTS, HTTPS redirect, cookie и antiforgery.
@@ -45,6 +47,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapEquipmentApi();
 app.MapEquipmentUiAccount();
+app.MapEquipmentHealthChecks();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .RequireAuthorization(UiAuthentication.Policy);
