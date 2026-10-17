@@ -7,9 +7,10 @@
 @inject ILogger<MaintenanceHistory> Logger
 
 <PageTitle>История обслуживания — EquipmentManager</PageTitle>
-<h1>История обслуживания</h1>
+<h1 class="page-title">История обслуживания</h1>
 <p class="text-secondary">Записи создаются при завершении заявок. Даты указаны в UTC. @(Storage.Provider == StorageProvider.InMemory ? "При перезапуске приложения учебная история теряется." : "История сохраняется после перезапуска приложения.")</p>
-<div class="row g-3 align-items-end mb-3">
+<div class="toolbar mb-3">
+    <div class="row g-3 align-items-end">
     <div class="col-12 col-md-8">
         <label for="history-equipment" class="form-label">Оборудование</label>
         <select id="history-equipment" class="form-select" @bind="selectedEquipmentId">
@@ -23,13 +24,14 @@
     <div class="col-12 col-md-4">
         <button type="button" class="btn btn-outline-primary" disabled="@loading" @onclick="LoadHistory">Обновить историю</button>
     </div>
+    </div>
 </div>
 @{
     // Не вычисляем выборку при ошибке; при успешной загрузке используем её один раз за рендер.
     IReadOnlyList<MaintenanceRecord> filteredRecords = loadError is null ? FilteredRecords : [];
 }
 
-@if (loading) { <p>Загрузка...</p> }
+@if (loading) { <p class="state-panel" role="status">Загрузка...</p> }
 else if (loadError is not null)
 {
     <div class="alert alert-danger" role="alert">
@@ -39,10 +41,11 @@ else if (loadError is not null)
 }
 else if (filteredRecords.Count == 0)
 {
-    <p role="status">История обслуживания отсутствует</p>
+    <p class="state-panel" role="status">История обслуживания отсутствует</p>
 }
 else
 {
+    <p class="table-scroll-hint text-secondary">Если таблица не помещается, прокрутите её вправо, чтобы увидеть все данные и действия. С клавиатуры: перейдите к таблице клавишей Tab и используйте стрелки.</p>
     <div class="table-responsive border rounded bg-white" role="region" aria-label="История обслуживания" tabindex="0">
         <table class="table align-middle history-table">
             <thead>

@@ -5,9 +5,9 @@
 @inject NavigationManager Navigation
 @inject StorageSettings Storage
 
-<PageTitle>Оборудование</PageTitle>
+<PageTitle>Оборудование — EquipmentManager</PageTitle>
 
-<h1>Оборудование</h1>
+<h1 class="page-title">Оборудование</h1>
 
 <p>Список единиц промышленного оборудования, учтённых в системе.</p>
 
@@ -83,7 +83,7 @@
     </section>
 }
 
-<div class="mb-3">
+<div class="toolbar mb-3">
     <label for="equipment-search" class="form-label">Поиск</label>
     <input id="equipment-search"
            @ref="searchInput"
@@ -105,18 +105,19 @@
 }
 else if (loading || allEquipment is null)
 {
-    <p><em>Загрузка...</em></p>
+    <p class="state-panel" role="status">Загрузка...</p>
 }
 else if (allEquipment.Count == 0)
 {
-    <p role="status">В реестре пока нет оборудования</p>
+    <p class="state-panel" role="status">В реестре пока нет оборудования</p>
 }
 else if (filteredEquipment.Count == 0)
 {
-    <p role="status">Оборудование не найдено</p>
+    <p class="state-panel" role="status">Оборудование не найдено</p>
 }
 else
 {
+    <p class="table-scroll-hint text-secondary">Если таблица не помещается, прокрутите её вправо, чтобы увидеть все данные и действия. С клавиатуры: перейдите к таблице клавишей Tab и используйте стрелки.</p>
     <div class="table-responsive border rounded bg-white" role="region" aria-label="Реестр оборудования" tabindex="0">
     <table class="table equipment-table">
         <thead>
@@ -135,7 +136,7 @@ else
                     <td>@item.Name</td>
                     <td>@item.InventoryNumber</td>
                     <td>@item.Location</td>
-                    <td>@item.Status</td>
+                    <td><span class="status-badge @(item.Status switch { "Исправно" => "status-success", "Требует обслуживания" => "status-warning", "Неисправно" => "status-danger", _ => "status-neutral" })">@item.Status</span></td>
                     <td>
                         @if (permissions.CanManageEquipment)
                         {

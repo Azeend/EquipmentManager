@@ -5,7 +5,9 @@
 @inject YandexOAuthSettings Yandex
 
 <PageTitle>Вход — EquipmentManager</PageTitle>
-<h1>Вход в EquipmentManager</h1>
+<section class="login-panel" aria-labelledby="login-title">
+<h1 id="login-title">Вход в EquipmentManager</h1>
+<p class="text-secondary">Учёт промышленного оборудования и организация обслуживания.</p>
 <p>Используйте электронную почту и пароль существующей учётной записи Supabase.</p>
 @if (!string.IsNullOrEmpty(Error))
 {
@@ -25,7 +27,7 @@ else if (Status == "local_signout")
 }
 else
 {
-    <form method="post" action="/account/login" data-enhance="false" class="card card-body" style="max-width: 30rem">
+    <form method="post" action="/account/login" data-enhance="false" class="password-form">
         <AntiforgeryToken />
         <input type="hidden" name="returnUrl" value="@UiAccountEndpoints.LocalReturnUrl(ReturnUrl)" />
         <label for="login-email" class="form-label">Электронная почта</label>
@@ -36,7 +38,7 @@ else
     </form>
     @if (Yandex.Enabled)
     {
-        <form method="post" action="/account/oauth/yandex" data-enhance="false" class="mt-3">
+        <form method="post" action="/account/oauth/yandex" data-enhance="false" class="yandex-form">
             <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@UiAccountEndpoints.LocalReturnUrl(ReturnUrl)" />
             <button type="submit" class="btn btn-outline-primary">Войти через Яндекс</button>
@@ -44,6 +46,8 @@ else
     }
     <p class="text-secondary mt-3">При истечении срока сеанса потребуется повторный вход. Пароль и токены не сохраняются в хранилище браузера приложением.</p>
 }
+
+</section>
 
 @code {
     /// <summary>Безопасный код ошибки без ответа Auth и учётных данных.</summary>

@@ -1,10 +1,21 @@
 @page "/"
 <PageTitle>Главная — EquipmentManager</PageTitle>
-<h1>Главная</h1>
-<p class="text-secondary">Рабочее пространство для учёта и обслуживания оборудования предприятия.</p>
-<section class="card p-4" aria-labelledby="overview-title">
-    <h2 id="overview-title" class="h5">Обзор оборудования</h2>
-    <p>В реестре доступны список оборудования и поиск по наименованию или инвентарному номеру.</p>
-    <p class="text-secondary">В разделе неисправностей можно зарегистрировать заявку и выполнить обслуживание. Завершённые работы доступны в истории обслуживания.</p>
-    <div><a class="btn btn-primary" href="equipment">Открыть реестр</a></div>
-</section>
+<h1 class="page-title">EquipmentManager</h1>
+<p class="text-secondary">Реестр оборудования, заявки на устранение неисправностей и выполненные работы.</p>
+<div class="home-sections">
+    <section class="card card-body" aria-labelledby="equipment-title">
+        <h2 id="equipment-title" class="h4">Оборудование</h2>
+        <p>Просмотр реестра, поиск по наименованию и инвентарному номеру.</p>
+        <a class="btn btn-primary" href="equipment">Открыть реестр</a>
+    </section>
+    <section class="card card-body" aria-labelledby="faults-title">
+        <h2 id="faults-title" class="h4">Неисправности</h2>
+        <p>Регистрация заявок и работа по устранению неисправностей в соответствии с вашими правами.</p>
+        <a class="btn btn-outline-primary" href="faults">Открыть заявки</a>
+    </section>
+    <section class="card card-body" aria-labelledby="history-title">
+        <h2 id="history-title" class="h4">История обслуживания</h2>
+        <p>Выполненные работы, результаты обслуживания и ссылки на заявки.</p>
+        <a class="btn btn-outline-primary" href="maintenance-history">Открыть историю</a>
+    </section>
+</div>

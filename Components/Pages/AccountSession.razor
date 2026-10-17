@@ -4,6 +4,7 @@
 @inject YandexOAuthSettings Yandex
 
 <PageTitle>Сеанс — EquipmentManager</PageTitle>
+<section class="card card-body session-panel">
 <h1>Пользовательский сеанс</h1>
 <AuthorizeView>
     <Authorized Context="session"><p>Вход выполнен: @session.User.Identity?.Name</p></Authorized>
@@ -19,7 +20,9 @@
 }
 <p>Проверка ниже обращается к существующему Backend API с серверным Bearer-токеном и не изменяет оборудование.</p>
 <button class="btn btn-primary" disabled="@loading" @onclick="CheckApiAsync">Проверить доступ к API</button>
-@if (message is not null) { <p class="mt-3" role="status">@message</p> }
+@if (message is not null) { <p class="alert alert-info mt-3" role="status">@message</p> }
+
+</section>
 
 @code {
     private bool loading;

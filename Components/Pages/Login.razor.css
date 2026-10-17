@@ -1,0 +1,6 @@
+.login-panel { width: 100%; max-width: 32rem; margin: 1rem auto; padding: clamp(1rem, 3vw, 2rem); background: #fff; border: 1px solid #dce3ec; border-radius: .75rem; }
+h1 { font-size: 1.75rem; }
+.password-form { display: flex; flex-direction: column; margin-top: 1.5rem; }
+.yandex-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dce3ec; }
+.yandex-form .btn { width: 100%; }
+p { overflow-wrap: anywhere; }

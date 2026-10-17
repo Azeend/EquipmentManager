@@ -8,7 +8,7 @@
             <div><span class="context-label">Предприятие</span><strong>Управление оборудованием</strong></div>
             <AuthorizeView>
                 <Authorized Context="session">
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="session-actions">
                         <span class="session-status">@session.User.Identity?.Name</span>
                         <a href="account/session">Сеанс</a>
                         <form method="post" action="/account/logout" data-enhance="false">

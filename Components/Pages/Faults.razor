@@ -5,8 +5,8 @@
 @inject NavigationManager Navigation
 @inject StorageSettings Storage
 
-<PageTitle>Заявки — EquipmentManager</PageTitle>
-<h1>Заявки на устранение неисправностей</h1>
+<PageTitle>Неисправности — EquipmentManager</PageTitle>
+<h1 class="page-title">Неисправности</h1>
 <p class="text-secondary">@(Storage.Provider == StorageProvider.InMemory ? "Учебные данные хранятся в памяти до перезапуска." : "Данные сохраняются после перезапуска приложения.") Даты указаны в UTC.</p>
 @if (errors.Count > 0)
 {
@@ -67,11 +67,12 @@
         </EditForm>
     </section>
 }
-@if (loading) { <p>Загрузка...</p> }
+@if (loading) { <p class="state-panel" role="status">Загрузка...</p> }
 else if (loadError is not null) { <div class="alert alert-danger" role="alert">@loadError</div> }
-else if (faults.Count == 0) { <p>Заявок пока нет.</p> }
+else if (faults.Count == 0) { <p class="state-panel" role="status">Заявок пока нет.</p> }
 else
 {
+    <p class="table-scroll-hint text-secondary">Если таблица не помещается, прокрутите её вправо, чтобы увидеть все данные и действия. С клавиатуры: перейдите к таблице клавишей Tab и используйте стрелки.</p>
     <div class="table-responsive border rounded bg-white" role="region" aria-label="Очередь заявок" tabindex="0">
         <table class="table align-middle faults-table">
             <thead><tr><th scope="col">№</th><th scope="col">Оборудование</th><th scope="col">Описание</th><th scope="col">Статус</th><th scope="col">Автор и даты (UTC)</th><th scope="col">Работы и результат</th><th scope="col">Действия</th></tr></thead>
@@ -79,7 +80,7 @@ else
                 @foreach (var fault in faults)
                 {
                     <tr @key="fault.Id" id="@($"fault-{fault.Id}")">
-                        <td>@fault.Id</td><td>@fault.EquipmentLabel</td><td>@fault.Description</td><td>@fault.Status</td>
+                        <td>@fault.Id</td><td>@fault.EquipmentLabel</td><td>@fault.Description</td><td><span class="status-badge @(fault.Status switch { "Новая" => "status-info", "В работе" => "status-warning", "Завершена" => "status-success", _ => "status-neutral" })">@fault.Status</span></td>
                         <td>@fault.Author<br />Создана: @FormatDate(fault.CreatedAt)<br />Начата: @FormatDate(fault.StartedAt)<br />Завершена: @FormatDate(fault.CompletedAt)</td>
                         <td>@fault.WorkDescription<br />@fault.Result</td>
                         <td>
